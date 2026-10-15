@@ -718,7 +718,8 @@ var Core = (function () {
     gpaWarn: 2.10,                // aviso si el GPA está en este valor o menos
     minRate: 66,                  // probatoria si aprobados/intentados < 66 %
     rateWarn: 70,                 // aviso si está por debajo de 70 %
-    ipTermOnly: true              // el término con cursos IP lleva solo esos cursos
+    ipTermOnly: true,             // el término con cursos IP lleva solo esos cursos
+    capstoneLast: true            // los capstone van en los últimos términos; nada después
   };
   var GRADE_ORDER = { A: 4, B: 3, C: 2, D: 1, F: 0 };
 
@@ -1030,6 +1031,7 @@ var Core = (function () {
     st.approvedCodes = st.approvedCodes.concat(exempt.filter(function (c) { return byCurr[c] && byCurr[c].type === 'PREP'; }));
     mergeSmallTerms(plan, pr, st);
     balanceTail(plan, pr);
+    if (pr.capstoneLast !== false) capstonesLast(plan, pr, st);
     return plan;
   }
 
@@ -1137,6 +1139,87 @@ var Core = (function () {
       }
     }
   }
+  /** Regla: los cursos de proyecto/capstone van en los últimos términos del plan; nada se toma después. */
+  function capstonesLast(plan, pr, st) {
+    var T = plan.terms;
+    var isCap = function (c) { return c.type === 'CAP'; };
+    var nonEmpty = []; T.forEach(function (t, i) { if (t.courses.length) nonEmpty.push(i); });
+    var capIdx = nonEmpty.filter(function (i) { return T[i].courses.some(isCap); });
+    if (!capIdx.length) return;
+    var k = capIdx.length, last = nonEmpty[nonEmpty.length - 1];
+    var lastK = nonEmpty.slice(-k);
+    if (capIdx.every(function (v, i) { return v === lastK[i]; })) return;   // ya están al final
+    var first = capIdx[0], tail = T.slice(first, last + 1);
+    if (tail.some(function (t) { return t.courses.some(function (c) { return c.fixed || c.grade === 'IP'; }); })) return;
+    var stages = capIdx.map(function (i) { return T[i].courses.filter(isCap); });
+    var capCodes = new Set(); stages.forEach(function (s) { s.forEach(function (c) { capCodes.add(c.code); }); });
+    var others = []; tail.forEach(function (t) { t.courses.forEach(function (c) { if (!isCap(c)) others.push({ c: c, from: t }); }); });
+    if (others.some(function (o) { return (o.c.prereqs || []).some(function (ors) { return ors.some(function (x) { return capCodes.has(x); }); }); })) return;
+    // Correquisitos que estaban juntos se mueven juntos.
+    var bundles = [], seen = new Set();
+    others.forEach(function (o) {
+      if (seen.has(o.c)) return;
+      var b = [o.c]; seen.add(o.c);
+      for (var g = 0; g < b.length; g++) {
+        others.forEach(function (p) {
+          if (seen.has(p.c) || p.from !== o.from) return;
+          var linked = (b[g].coreqs || []).some(function (ors) { return ors.indexOf(p.c.code) >= 0; }) ||
+                       (p.c.coreqs || []).some(function (ors) { return ors.indexOf(b[g].code) >= 0; });
+          if (linked) { b.push(p.c); seen.add(p.c); }
+        });
+      }
+      bundles.push(b);
+    });
+    var base = doneBeforeIndex(plan, first, st.approvedCodes);
+    var tailCodes = new Set(); tail.forEach(function (t) { t.courses.forEach(function (c) { tailCodes.add(c.code); }); });
+    function attempt(terms, order) {
+      var m = terms.length; if (m < k) return null;
+      var slots = terms.map(function () { return []; });
+      for (var j = 0; j < k; j++) {
+        var s = m - k + j;
+        if (!stages[j].every(function (c) { return offeredIn(c, terms[s].season); })) return null;
+        slots[s] = stages[j].slice();
+      }
+      function lim(s) { var cap = termCap(terms[s], pr); return slots[s].some(isCap) ? Math.min(cap, pr.finalLoadMax) : cap; }
+      function doneBefore(s) { var d = new Set(base); for (var q = 0; q < s; q++) slots[q].forEach(function (c) { d.add(c.code); }); return d; }
+      for (var bi = 0; bi < order.length; bi++) {
+        var b = order[bi], add = sum(b, function (c) { return num(c.credits); }), placed = false;
+        for (var s = 0; s < m && !placed; s++) {
+          var before = doneBefore(s);
+          if (!b.every(function (c) { return prereqOK(c, before) && offeredIn(c, terms[s].season); })) continue;
+          if (sum(slots[s], function (c) { return num(c.credits); }) + add > lim(s)) continue;
+          if (!fitsCourses(terms[s], pr, slots[s], b) || subjectClash(slots[s], b, pr)) continue;
+          b.forEach(function (c) { slots[s].push(c); }); placed = true;
+        }
+        if (!placed) return null;
+      }
+      // Validación final: prerrequisitos y correquisitos de todo el tramo.
+      for (var s2 = 0; s2 < m; s2++) {
+        var bf = doneBefore(s2), inS = new Set(slots[s2].map(function (c) { return c.code; }));
+        var ok = slots[s2].every(function (c) {
+          return prereqOK(c, bf) && (c.coreqs || []).every(function (ors) { return ors.some(function (x) { return bf.has(x) || inS.has(x) || !tailCodes.has(x); }); });
+        });
+        if (!ok) return null;
+      }
+      return slots;
+    }
+    // Se prueban varios órdenes (el original y de mayor a menor créditos) para que todo quepa sin alargar el plan.
+    var bcr = function (b) { return sum(b, function (c) { return num(c.credits); }); };
+    var orders = [bundles, bundles.slice().sort(function (a, b) { return bcr(b) - bcr(a); }), bundles.slice().sort(function (a, b) { return bcr(a) - bcr(b); })];
+    function tryAll(terms) { for (var oi = 0; oi < orders.length; oi++) { var r = attempt(terms, orders[oi]); if (r) return r; } return null; }
+    var slots = tryAll(tail), extra = null;
+    if (!slots) {
+      // Si no cabe, se añade un término al final para que el capstone quede de último.
+      var lt = tail[tail.length - 1], nt = Terms.next({ season: lt.season, year: lt.year }, pr.includeSummer);
+      extra = { season: nt.season, year: nt.year, label: Terms.label(nt), courses: [] };
+      slots = tryAll(tail.concat([extra]));
+      if (!slots) return;
+    }
+    tail.forEach(function (t, i) { t.courses = slots[i]; });
+    if (extra) { extra.courses = slots[slots.length - 1]; T.splice(last + 1, 0, extra); relabel(plan, pr); }
+    // Quita términos vacíos que hayan quedado al final.
+    while (T.length && !T[T.length - 1].courses.length) T.pop();
+  }
   function relabel(plan, pr) {
     if (!plan.terms.length) return;
     var seq = Terms.sequence({ season: plan.terms[0].season, year: plan.terms[0].year }, plan.terms.length, pr.includeSummer);
@@ -1182,6 +1265,14 @@ var Core = (function () {
     if (target && course.grade !== 'IP' && pr.ipTermOnly !== false && target.courses.some(function (x) { return x.uid !== course.uid && (x.fixed || x.grade === 'IP'); }))
       warnings.push(target.label + ' tiene cursos en progreso (IP); ese término debe llevar solo esos cursos.');
     if (course.grade === 'IP' && targetIdx !== 0) warnings.push('Este curso está en progreso (IP) y pertenece al término actual.');
+    if (target && pr.capstoneLast !== false) {
+      var capAt = -1;
+      plan.terms.forEach(function (t, i) { if (t.courses.some(function (x) { return x.type === 'CAP' && x.uid !== course.uid; })) capAt = i; });
+      if (course.type !== 'CAP' && capAt >= 0 && targetIdx > capAt)
+        warnings.push(course.code + ' quedaría después del capstone. La regla es que el capstone sea lo último del plan.');
+      if (course.type === 'CAP' && plan.terms.some(function (t, i) { return i > targetIdx && t.courses.some(function (x) { return x.uid !== course.uid && x.type !== 'CAP'; }); }))
+        warnings.push('Después de ' + target.label + ' quedan otros cursos. La regla es que el capstone sea lo último del plan.');
+    }
     return warnings;
   }
 
@@ -3260,6 +3351,7 @@ function openSettings(){
     '<label class="field">Materias con prioridad<input data-s="prioritySubjects" value="'+esc(p.prioritySubjects)+'"></label>'+
     '<label class="field">Solo un curso por término de<input data-s="onePerTermSubjects" value="'+esc(p.onePerTermSubjects||'')+'" placeholder="MATH"></label>'+
     '<label class="field">Término con cursos en progreso (IP)<select data-s="ipTermOnly"><option value="1"'+(p.ipTermOnly!==false?' selected':'')+'>Solo los cursos IP</option><option value="0"'+(p.ipTermOnly===false?' selected':'')+'>Permitir otros cursos</option></select></label>'+
+    '<label class="field">Proyecto / capstone<select data-s="capstoneLast"><option value="1"'+(p.capstoneLast!==false?' selected':'')+'>Siempre en los últimos términos</option><option value="0"'+(p.capstoneLast===false?' selected':'')+'>Permitir cursos después</option></select></label>'+
     '</div></details><details class="more"><summary>Probatoria académica</summary><div class="grid2">'+
     '<label class="field">GPA mínimo (probatoria por debajo)<input data-s="minGPA" inputmode="decimal" value="'+(p.minGPA!=null?p.minGPA:2)+'"></label>'+
     '<label class="field">Aviso de GPA (hasta)<input data-s="gpaWarn" inputmode="decimal" value="'+(p.gpaWarn!=null?p.gpaWarn:2.1)+'"></label>'+
@@ -3273,7 +3365,7 @@ function openSettings(){
     var v=function(k){ return b.querySelector('[data-s="'+k+'"]').value; };
     var np={ startSeason:v('startSeason'), startYear:parseInt(v('startYear'),10)||2026,
       minCredits:Core.num(v('minCredits')), summerMax:Core.num(v('summerMax'))||12,
-      finalLoadMax:Core.num(v('finalLoadMax'))||9, capWindowCredits:Core.num(v('capWindowCredits')), prioritySubjects:v('prioritySubjects'), onePerTermSubjects:v('onePerTermSubjects'), minGPA:Core.num(v('minGPA')), gpaWarn:Core.num(v('gpaWarn')), minRate:Core.num(v('minRate')), rateWarn:Core.num(v('rateWarn')), ipTermOnly:v('ipTermOnly')==='1',
+      finalLoadMax:Core.num(v('finalLoadMax'))||9, capWindowCredits:Core.num(v('capWindowCredits')), prioritySubjects:v('prioritySubjects'), onePerTermSubjects:v('onePerTermSubjects'), minGPA:Core.num(v('minGPA')), gpaWarn:Core.num(v('gpaWarn')), minRate:Core.num(v('minRate')), rateWarn:Core.num(v('rateWarn')), ipTermOnly:v('ipTermOnly')==='1', capstoneLast:v('capstoneLast')==='1',
       minGradeForReq:v('minGradeForReq') };
     var changed=JSON.stringify(np)!==JSON.stringify(Object.assign({},S.plannerRules,np)) || Object.keys(np).some(function(k){return S.plannerRules[k]!==np[k];});
     S.plannerRules=Object.assign({},S.plannerRules,np);
