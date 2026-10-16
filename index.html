@@ -1315,6 +1315,8 @@ function load(){
     var s = JSON.parse(raw); var needSummerOff = !s.summerOffMigrated; var d = defaultState();
     Object.keys(d).forEach(function(k){ if(!(k in s)) s[k]=d[k]; });
     s.plannerRules = Object.assign({}, Core.DEFAULT_PLANNER_RULES, s.plannerRules||{});
+    // Reglas internas (no se ven ni se editan): probatoria y nota mínima D.
+    ['minGPA','gpaWarn','minRate','rateWarn','minGradeForReq'].forEach(function(k){ s.plannerRules[k]=Core.DEFAULT_PLANNER_RULES[k]; });
     // Summer pasa a estar desactivado por defecto (una sola vez para datos guardados antes)
     if(needSummerOff){
       s.plannerRules.includeSummer=false; s.summerOffMigrated=true; s._summerRegen=true;
@@ -1327,7 +1329,7 @@ function load(){
     var mig=function(o){ if(o && o.useOfficialGPA && o.officialGPA!=null && o.gpaOverride==null){ o.gpaOverride=o.officialGPA; o.useOfficialGPA=false; } };
     mig(s); Object.keys(s.roster||{}).forEach(function(k){ mig(s.roster[k]); });
     ['customOptions','prepExempt','offerOverrides','curricula'].forEach(function(key){ var m=s[key]; if(!m) return; Object.keys(REN).forEach(function(o){ if(m[o] && !m[REN[o]]){ m[REN[o]]=m[o]; } delete m[o]; }); });
-    s.gpaRules = Object.assign({}, Core.DEFAULT_GPA_RULES, s.gpaRules||{});
+    s.gpaRules = Object.assign({}, Core.DEFAULT_GPA_RULES);   // regla de GPA de PUPR: interna, no se edita
     return s;
   }catch(e){ return null; }
 }
@@ -1588,7 +1590,7 @@ function gpaOverride(){
 }
 function setGPAOverride(v){
   S.gpaOverride=v; S.useOfficialGPA=false; save(); renderAll();
-  toast(v==null?'Se usa el GPA calculado por la aplicación.':'GPA calculado editado a '+fmt(v)+'.');
+  toast(v==null?'GPA restaurado.':'GPA editado a '+fmt(v)+'.');
 }
 function setGPAFromInput(t){
   var gv=t.value.trim();
@@ -1624,7 +1626,6 @@ function probationStatus(){
   var g=gpaResult();
   var src='calculado', gpa=g.gpa;
   if(gpaOverride()!=null){ gpa=gpaOverride(); src='editado'; }
-  else if(S.officialGPA!=null){ gpa=S.officialGPA; src='oficial del transcript'; }
   var minG=Core.num(pr.minGPA!=null?pr.minGPA:2), warnG=Core.num(pr.gpaWarn!=null?pr.gpaWarn:2.1);
   if(gpa!=null){
     var gr=Math.round(gpa*1000)/1000;
@@ -2060,7 +2061,7 @@ function renderStudent(){
     '</select></span>' : '')+(S.program?'<button class="btn link" data-action="'+(cur?'open-audit':'open-curriculum')+'">'+(cur?'Ver currículo':'Cargar currículo')+'</button>':'')+trInfo+'</div>'+
     '<dl class="facts">'+
       '<div><dt><label for="gpaEdit">GPA acumulado</label></dt><dd><input id="gpaEdit" class="gpa-inline" inputmode="decimal" value="'+(a.gpa==null?'':fmt(a.gpa))+'" placeholder="—" title="Toca para editar el GPA">'+
-        (a.gpaEdited?'<small style="display:block">editado · la app calcula '+fmt(a.gpaCalc)+' <button class="btn link small" style="padding:0" data-action="gpa-calc">restaurar</button></small>':'<small style="display:block">calculado · toca para editar</small>')+'</dd></div>'+
+        (a.gpaEdited?'<small style="display:block">editado · <button class="btn link small" style="padding:0" data-action="gpa-calc">restaurar</button></small>':'<small style="display:block">toca para editar</small>')+'</dd></div>'+
       '<div><dt>Créditos aprobados</dt><dd>'+fmtCr(a.earned)+(a.earnedPrep?' <small>+'+fmtCr(a.earnedPrep)+' prep.</small>':'')+'</dd></div>'+
       '<div><dt>Créditos pendientes</dt><dd>'+(a.pending==null?'—':fmtCr(a.pending))+'</dd></div>'+
       '<div><dt>Graduación estimada</dt><dd>'+esc(a.grad)+'</dd></div>'+
@@ -2177,39 +2178,13 @@ function renderHistory(){
       '<div class="row"><button class="btn primary" data-action="open-transcript">Cargar transcript o Degree Audit</button>'+(curr()?'<button class="btn" data-action="open-audit">Marcar cursos a mano</button>':'<button class="btn" data-action="add-rec">Agregar cursos a mano</button>')+'</div></div>';
     return;
   }
-  var g=gpaResult(), r=S.gpaRules, off=S.officialGPA;
-  var shownG=gpaOverride()!=null?gpaOverride():g.gpa;
-  var diff=(off!=null && shownG!=null) ? off-Core.round2(shownG) : null;
-  var scen=Core.gpaScenarios(S.records, r, prepTypeOf(curr()), off);
-  var lbl={highest:'Nota más alta',latest:'Intento más reciente',all:'Todos los intentos'};
-  var matches=scen.filter(function(s){return s.match;});
-  var rowsById={}; g.rows.forEach(function(x){ rowsById[x.ref.id]=x; });
+  var g=gpaResult();
   var psH=probationStatus();
-  var html=(psH.items.length?'<div class="notice '+(psH.level==='bad'?'bad':'')+'" style="display:block">'+psH.items.map(function(x){return esc(x.t);}).join('<br>')+'</div>':'')+'<div class="toolbar"><button class="btn" data-action="open-transcript">Cargar otro archivo</button>'+
-    '<button class="btn" data-action="view-transcript"'+(S.transcriptText||session.pdfData?'':' disabled')+'>Ver transcript</button></div>';
-  html+='<div class="gpa-cmp">'+
-    '<label><span class="k">GPA acumulado oficial</span><input id="offGPA" inputmode="decimal" value="'+(off==null?'':off)+'" placeholder="0.00"></label>'+
-    '<div><label class="k" for="gpaCalcEdit">GPA calculado</label><input id="gpaCalcEdit" class="gpa-inline" style="font-size:24px" inputmode="decimal" value="'+(gpaOverride()!=null?fmt(gpaOverride()):(g.gpa==null?'':fmt(g.gpa)))+'" placeholder="—">'+
-      (gpaOverride()!=null?'<span class="small muted" style="display:block">editado · la app calcula '+fmt(g.gpa)+' <button class="btn link small" style="padding:0" data-action="gpa-calc">restaurar</button></span>':'<span class="small muted" style="display:block">toca para editar</span>')+'</div>'+
+  var html=(psH.items.length?'<div class="notice '+(psH.level==='bad'?'bad':'')+'" style="display:block">'+psH.items.map(function(x){return esc(x.t);}).join('<br>')+'</div>':'')+'<div class="toolbar"><button class="btn" data-action="open-transcript">Cargar otro archivo</button></div>';
+  html+='<div class="gpa-cmp" style="grid-template-columns:1fr">'+
+    '<div><label class="k" for="gpaCalcEdit">GPA acumulado</label><input id="gpaCalcEdit" class="gpa-inline" style="font-size:24px" inputmode="decimal" value="'+(gpaOverride()!=null?fmt(gpaOverride()):(g.gpa==null?'':fmt(g.gpa)))+'" placeholder="—">'+
+      (gpaOverride()!=null?'<span class="small muted" style="display:block">editado · <button class="btn link small" style="padding:0" data-action="gpa-calc">restaurar</button></span>':'<span class="small muted" style="display:block">toca para editar</span>')+'</div>'+
     '</div>';
-
-  var verdict=(off!=null && Math.abs(diff||0)>=0.005) ? '<p class="verdict">'+(matches.length
-    ? 'Estas reglas reproducen el GPA oficial: '+matches.map(function(m){return esc(lbl[m.repeatPolicy]+', preparatorios '+(m.includePrep?'incluidos':'excluidos')+', WF '+(m.wfPolicy==='asF'?'como F':'excluido'));}).join('; ')+'.'
-    : 'Ninguna combinación de reglas reproduce el GPA oficial. Revisa abajo las notas y créditos: puede faltar un curso o haber un dato mal leído.')+'</p>' : '';
-  html+='<details class="more"'+(session.rulesOpen?' open':'')+' id="rulesBox"><summary>Detalle interno del cálculo</summary>'+verdict+
-    '<p class="formula">Puntos de calidad '+fmt(g.qualityPoints)+' ÷ créditos que cuentan '+fmtCr(g.gpaCredits)+' = <strong>'+fmt(g.gpa,3)+'</strong>'+
-    (g.gpa!=null?' <span class="muted small">(redondeado '+fmt(Core.round2(g.gpa))+', truncado '+fmt(Core.trunc2(g.gpa))+')</span>':'')+'</p>'+
-    '<div class="rules">'+
-      '<label>Cursos repetidos<select data-gpa="repeatPolicy">'+['highest','latest','all'].map(function(v){return '<option value="'+v+'"'+(r.repeatPolicy===v?' selected':'')+'>'+lbl[v]+'</option>';}).join('')+'</select></label>'+
-      '<label>Preparatorios (0xxx)<select data-gpa="includePrep"><option value="1"'+(r.includePrep?' selected':'')+'>Incluir en el GPA</option><option value="0"'+(!r.includePrep?' selected':'')+'>Excluir del GPA</option></select></label>'+
-      '<label>WF<select data-gpa="wfPolicy"><option value="exclude"'+(r.wfPolicy==='exclude'?' selected':'')+'>Excluir del GPA</option><option value="asF"'+(r.wfPolicy==='asF'?' selected':'')+'>Contar como F</option></select></label>'+
-    '</div>'+
-    '<div style="overflow-x:auto"><table class="plain"><thead><tr><th>Repetidos</th><th>Preparatorios</th><th>WF</th><th class="num">Créditos GPA</th><th class="num">GPA</th></tr></thead><tbody>'+
-      scen.map(function(s){return '<tr class="'+(s.match?'match':'')+'"><td>'+lbl[s.repeatPolicy]+'</td><td>'+(s.includePrep?'Incluir':'Excluir')+'</td><td>'+(s.wfPolicy==='asF'?'Como F':'Excluir')+'</td><td class="num">'+fmtCr(s.credits)+'</td><td class="num">'+fmt(s.gpa,3)+'</td></tr>';}).join('')+
-    '</tbody></table></div>'+
-    '<p class="small muted" style="margin:14px 0 4px">Cursos por curso (puntos y razón):</p><div style="overflow-x:auto"><table class="plain"><thead><tr><th>Curso</th><th>Nota</th><th class="num">Créditos</th><th class="num">Puntos</th><th>Cálculo</th></tr></thead><tbody>'+
-      S.records.map(function(rec){ var x=rowsById[rec.id]||{}; return '<tr'+(x.counts?'':' style="color:var(--muted)"')+'><td>'+esc(rec.code)+'</td><td>'+esc(rec.grade)+'</td><td class="num">'+fmtCr(rec.credits)+'</td><td class="num">'+(x.counts?fmt(x.points):'—')+'</td><td>'+esc(x.reason||'')+'</td></tr>'; }).join('')+
-    '</tbody></table></div></details>';
   html+='<h4 class="sec">Historial académico</h4><p class="small muted" style="margin:0 0 8px">Datos leídos del transcript'+(S.transcriptName?' ('+esc(S.transcriptName)+')':'')+'. Si algo se leyó mal, corrígelo con Editar.</p>';
   html+='<table class="ctable hist"><colgroup><col style="width:104px"><col style="width:100px"><col><col style="width:76px"><col style="width:64px"><col style="width:76px"></colgroup>'+
     '<thead><tr><th>Término</th><th>Curso</th><th>Descripción</th><th class="cr">Créditos</th><th>Nota</th><th></th></tr></thead><tbody>'+
@@ -3396,21 +3371,13 @@ function openSettings(){
     '<label class="field">Solo un curso por término de<input data-s="onePerTermSubjects" value="'+esc(p.onePerTermSubjects||'')+'" placeholder="MATH"></label>'+
     '<label class="field">Término con cursos en progreso (IP)<select data-s="ipTermOnly"><option value="1"'+(p.ipTermOnly!==false?' selected':'')+'>Solo los cursos IP</option><option value="0"'+(p.ipTermOnly===false?' selected':'')+'>Permitir otros cursos</option></select></label>'+
     '<label class="field">Proyecto / capstone<select data-s="capstoneLast"><option value="1"'+(p.capstoneLast!==false?' selected':'')+'>Siempre en los últimos términos</option><option value="0"'+(p.capstoneLast===false?' selected':'')+'>Permitir cursos después</option></select></label>'+
-    '</div></details><details class="more"><summary>Probatoria académica</summary><div class="grid2">'+
-    '<label class="field">GPA mínimo (probatoria por debajo)<input data-s="minGPA" inputmode="decimal" value="'+(p.minGPA!=null?p.minGPA:2)+'"></label>'+
-    '<label class="field">Aviso de GPA (hasta)<input data-s="gpaWarn" inputmode="decimal" value="'+(p.gpaWarn!=null?p.gpaWarn:2.1)+'"></label>'+
-    '<label class="field">% mínimo aprobados/intentados<input data-s="minRate" inputmode="decimal" value="'+(p.minRate!=null?p.minRate:66)+'"></label>'+
-    '<label class="field">Aviso de % (por debajo de)<input data-s="rateWarn" inputmode="decimal" value="'+(p.rateWarn!=null?p.rateWarn:70)+'"></label>'+
-    '</div></details><details class="more"><summary>Otras reglas</summary><div class="grid2">'+
-    '<label class="field">Nota mínima para aprobar prerrequisitos<select data-s="minGradeForReq">'+['D','C'].map(function(x){return '<option'+(p.minGradeForReq===x?' selected':'')+'>'+x+'</option>';}).join('')+'</select></label>'+
     '</div></details>'+
-    '<p class="small muted">Las reglas no confirmadas por la institución quedan aquí para ajustarlas. El término mínimo de cada curso (por ejemplo IE 1611 o las electivas de ME) se define en la columna 8 del currículo y se cuenta desde el primer término del plan.</p>';
+    '<p class="small muted">El término mínimo de cada curso (por ejemplo IE 1611 o las electivas de ME) se define en la columna 8 del currículo y se cuenta desde el primer término del plan.</p>';
   var m=modal({title:'Ajustes', body:body, buttons:[{label:'Cancelar'},{label:'Guardar',primary:true,onClick:function(b){
     var v=function(k){ return b.querySelector('[data-s="'+k+'"]').value; };
     var np={ startSeason:v('startSeason'), startYear:parseInt(v('startYear'),10)||2026,
       minCredits:Core.num(v('minCredits')), summerMax:Core.num(v('summerMax'))||12,
-      finalLoadMax:Core.num(v('finalLoadMax'))||9, capWindowCredits:Core.num(v('capWindowCredits')), prioritySubjects:v('prioritySubjects'), onePerTermSubjects:v('onePerTermSubjects'), minGPA:Core.num(v('minGPA')), gpaWarn:Core.num(v('gpaWarn')), minRate:Core.num(v('minRate')), rateWarn:Core.num(v('rateWarn')), ipTermOnly:v('ipTermOnly')==='1', capstoneLast:v('capstoneLast')==='1',
-      minGradeForReq:v('minGradeForReq') };
+      finalLoadMax:Core.num(v('finalLoadMax'))||9, capWindowCredits:Core.num(v('capWindowCredits')), prioritySubjects:v('prioritySubjects'), onePerTermSubjects:v('onePerTermSubjects'), ipTermOnly:v('ipTermOnly')==='1', capstoneLast:v('capstoneLast')==='1' };
     var changed=JSON.stringify(np)!==JSON.stringify(Object.assign({},S.plannerRules,np)) || Object.keys(np).some(function(k){return S.plannerRules[k]!==np[k];});
     S.plannerRules=Object.assign({},S.plannerRules,np);
     save();
