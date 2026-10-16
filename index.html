@@ -1865,7 +1865,7 @@ function openCompare(){
     '<label class="field hidden" data-cswrap>Especialidad<select data-cs></select></label></div><div data-cres></div></div>'+
     '<div data-pall class="hidden"></div>';
   var m=modal({title:'Comparar programas', body:body, wide:true, buttons:[
-    {label:'Descargar PDF', left:true, onClick:function(){ exportComparePDF(); return false; }},
+    {label:'Descargar PDF', left:true, onClick:function(){ askPDF(exportComparePDF); return false; }},
     {label:'Cerrar'},
     {label:'Cambiar a este programa',primary:true,onClick:function(){
       var key=compareState.mode==='one'?compareState.key:'';
@@ -2011,6 +2011,7 @@ function exportComparePDF(){
     if(B.plan.unscheduled.length) para('Sin ubicar: '+B.plan.unscheduled.map(function(u){return u.code;}).join(', '), [100,110,120]);
     name=b.name;
   }
+  pdfSignature(doc, y);
   pdfLetterhead(doc);
   saveFile(fileBase()+' - Comparacion '+pdfSafe(name).replace(/[\\\/:*?"<>|]/g,'')+'.pdf', doc.output('blob'));
 }
@@ -2648,7 +2649,7 @@ function openAudit(){
   wrap.innerHTML='<div class="zoombar"><span class="small muted">Escoge la nota de cada curso para marcarlo.</span><span class="spacer"></span>'+
     '<button class="btn sm" data-z="-" aria-label="Reducir">−</button><span class="zv" aria-live="polite"></span><button class="btn sm" data-z="+" aria-label="Ampliar">+</button>'+
     '<button class="btn sm" data-z="fit">Ajustar</button></div><div class="sheet-vp"><div class="sheet-sc"></div></div>';
-  var m=modal({title:'Currículo', body:wrap, wide:true, sheet:true, buttons:[{label:'Descargar PDF', left:true, onClick:function(){ exportAuditPDF(); return false; }},{label:'Listo', primary:true}], onClose:function(){
+  var m=modal({title:'Currículo', body:wrap, wide:true, sheet:true, buttons:[{label:'Descargar PDF', left:true, onClick:function(){ askPDF(exportAuditPDF); return false; }},{label:'Listo', primary:true}], onClose:function(){
     window.removeEventListener('resize',fit);
     if(session.auditChanged){
       if(S.plan && !S.planEdited) regenerate(true);
@@ -3110,6 +3111,7 @@ function exportAuditPDF(){
   var y=doc.lastAutoTable.finalY+16; if(y>530){ doc.addPage(); y=LH_TOP+10; }
   doc.setFontSize(10); doc.setTextColor(28,42,57);
   doc.text('Créditos del programa: '+fmtCr(cur.requiredCredits)+'     Aprobados: '+fmtCr(cur.requiredCredits-(a.pending||0))+'     Faltan: '+fmtCr(a.pending||0), M, y);
+  pdfSignature(doc, y);
   pdfLetterhead(doc);
   saveFile(fileBase()+' - Curriculo.pdf', doc.output('blob'));
 }
@@ -3195,6 +3197,45 @@ function pdfFooter(doc, W, H){
   }
   line(['SAN JUAN','ORLANDO','ONLINE'], H-30, 11, 'bold', gold);
   line(['PO Box 192017','San Juan, PR  00919-2017','787.622.8000','www.pupr.edu'], H-18, 8.5, 'normal', blue);
+}
+var SIGNER_DEFAULT={name:'', title:'Consejero en Rehabilitación', dept:'Centro de Servicios de Consejería, Psicología y Bienestar Estudiantil'};
+/** Pregunta antes de descargar si se incluye la firma del consejero al final. */
+function askPDF(fn){
+  var sg=Object.assign({}, SIGNER_DEFAULT, S.signer||{}), on=!!S.signOn;
+  var body='<div class="checklist"><label><input type="checkbox" data-sg-on'+(on?' checked':'')+'><span><strong>Incluir firma del consejero al final</strong><br><span class="small muted">Añade espacio para firmar y la fecha.</span></span></label></div>'+
+    '<div data-sg-fields style="margin-top:12px"'+(on?'':' class="hidden"')+'>'+
+    '<label class="field">Nombre del consejero (opcional)<input data-sg="name" value="'+esc(sg.name)+'" placeholder="Ej. Luis Rivera"></label>'+
+    '<label class="field">Puesto<input data-sg="title" value="'+esc(sg.title)+'"></label>'+
+    '<label class="field">Oficina<input data-sg="dept" value="'+esc(sg.dept)+'"></label></div>';
+  var m=modal({title:'Descargar PDF', narrow:true, body:body, buttons:[{label:'Cancelar'},{label:'Descargar',primary:true,onClick:function(b){
+    var chk=b.querySelector('[data-sg-on]').checked, nv={};
+    b.querySelectorAll('[data-sg]').forEach(function(i){ nv[i.getAttribute('data-sg')]=i.value.trim(); });
+    S.signOn=chk; S.signer=nv; save();
+    session.sign=chk;
+    try{ fn(); } finally { session.sign=false; }
+  }}]});
+  var cb=m.body.querySelector('[data-sg-on]'), fl=m.body.querySelector('[data-sg-fields]');
+  cb.addEventListener('change',function(){ fl.classList.toggle('hidden', !cb.checked); });
+}
+/** Bloque de firma al final del documento: línea de firma con nombre, puesto y oficina, y línea de fecha. */
+function pdfSignature(doc, y){
+  if(!session.sign) return;
+  var W=doc.internal.pageSize.getWidth(), H=doc.internal.pageSize.getHeight(), M=W>700?36:54, lw=240, dw=150;
+  doc.setPage(doc.internal.getNumberOfPages());
+  var sg=Object.assign({}, SIGNER_DEFAULT, S.signer||{});
+  doc.setFont('helvetica','normal'); doc.setFontSize(9.5);
+  var lines=[sg.title, sg.dept].filter(Boolean).reduce(function(a,l){ return a.concat(doc.splitTextToSize(pdfSafe(l), lw+70)); },[]);
+  var need=40+(sg.name?13:0)+lines.length*12+10;
+  y=Math.max(Core.num(y)||0, LH_TOP+10)+24;
+  if(y+need > H-LH_BOTTOM-8){ doc.addPage(); y=LH_TOP+30; }
+  var ly=y+34;
+  doc.setDrawColor(28,42,57); doc.setLineWidth(0.7);
+  doc.line(M, ly, M+lw, ly); doc.line(W-M-dw, ly, W-M, ly);
+  var ty=ly+13;
+  if(sg.name){ doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(28,42,57); doc.text(pdfSafe(sg.name), M, ty); ty+=13; }
+  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(59,72,85);
+  lines.forEach(function(l){ doc.text(l, M, ty); ty+=12; });
+  doc.text('Fecha', W-M-dw, ly+13);
 }
 /** Membrete como el template de la universidad: logo, nombre al centro, dirección a la derecha y pie. Se aplica a todas las páginas. */
 function pdfLetterhead(doc){
@@ -3301,7 +3342,9 @@ function exportPlanPDF(){
     doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.text('Cursos por ubicar', 54, y);
     doc.autoTable(Object.assign({}, TABLE_STYLE, {startY:y+6, head:[['Curso','Descripción','Créditos','Motivo']],
       body:S.plan.unscheduled.map(function(u){return [u.code,pdfSafe(u.name),fmtCr(u.credits),pdfSafe(u.reason)];})}));
+    y=doc.lastAutoTable.finalY+10;
   }
+  pdfSignature(doc, y);
   pdfLetterhead(doc);
   saveFile(fileBase()+' - Plan.pdf', doc.output('blob'));
 }
@@ -3331,6 +3374,7 @@ function exportTranscriptPDF(){
   doc.autoTable(Object.assign({}, TABLE_STYLE, {startY:y+6, head:[['Curso','Descripción','Créditos','Estado']],
     body:pending.length?pending:[['','Sin cursos pendientes registrados.','','']],
     columnStyles:{0:{cellWidth:70,fontStyle:'bold'},2:{cellWidth:50,halign:'right'},3:{cellWidth:62}}}));
+  pdfSignature(doc, doc.lastAutoTable.finalY+10);
   pdfLetterhead(doc);
   saveFile(fileBase()+' - Transcript.pdf', doc.output('blob'));
 }
@@ -3423,7 +3467,7 @@ document.addEventListener('click',function(e){
   else if(a==='hide-prevprog'){ if(S.prevProgram) S.prevProgram.hidden=true; save(); renderPlan(); }
   else if(a==='fastest') openFastest();
   else if(a==='import-audit') pickAuditFile();
-  else if(a==='pdf-audit') exportAuditPDF();
+  else if(a==='pdf-audit') askPDF(exportAuditPDF);
   else if(a==='clear-all') clearAll();
   else if(a==='open-settings') openSettings();
   else if(a==='new-student') newStudent();
@@ -3434,8 +3478,8 @@ document.addEventListener('click',function(e){
   else if(a==='electives') openElectives();
   else if(a==='preps') openPreps();
   else if(a==='view-transcript') viewTranscript();
-  else if(a==='pdf-plan') exportPlanPDF();
-  else if(a==='pdf-transcript') exportTranscriptPDF();
+  else if(a==='pdf-plan') askPDF(exportPlanPDF);
+  else if(a==='pdf-transcript') askPDF(exportTranscriptPDF);
   else if(a==='edit-course') openCourseEditor(btn.closest('tr').getAttribute('data-uid'));
   else if(a==='edit-term') openTermEditor(+btn.closest('.term').getAttribute('data-term'));
   else if(a==='add-course') openAddCourse(+btn.closest('.term').getAttribute('data-term'));
