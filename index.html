@@ -1366,11 +1366,11 @@ function gpaResult(){ return Core.computeGPA(S.records, S.gpaRules, prepTypeOf(c
 function baseDone(){ return new Set(Core.buildStatus(curr(), S.records, S.plannerRules).approvedCodes.concat(exemptList())); }
 
 /* ---------------- Varios estudiantes ---------------- */
-var STUDENT_FIELDS=['prevProgram','planTerms','student','records','officialGPA','officialTotals','termLimits','useOfficialGPA','gpaOverride','transcriptText','transcriptName','plan','planOriginal','planEdited','historyChanged','electiveSel','prepExempt','program','programBase'];
+var STUDENT_FIELDS=['planBeforeFill','prevProgram','planTerms','student','records','officialGPA','officialTotals','termLimits','useOfficialGPA','gpaOverride','transcriptText','transcriptName','plan','planOriginal','planEdited','historyChanged','electiveSel','prepExempt','program','programBase'];
 function snapshotStudent(){ var o={}; STUDENT_FIELDS.forEach(function(k){ o[k]=S[k]; }); o.updated=Date.now(); return JSON.parse(JSON.stringify(o)); }
 function hasStudentData(){ return !!(S.student && (S.student.name || S.student.id)) || S.records.length>0; }
 function blankStudentFields(){
-  S.planTerms=0; S.prevProgram=null;
+  S.planTerms=0; S.prevProgram=null; S.planBeforeFill=null;
   S.student={name:''}; S.records=[]; S.officialGPA=null; S.officialTotals=null; S.termLimits={}; S.useOfficialGPA=false; S.gpaOverride=null; S.transcriptText=''; S.transcriptName='';
   S.plan=null; S.planOriginal=null; S.planEdited=false; S.historyChanged=false; S.electiveSel={}; S.prepExempt={};
 }
@@ -1715,16 +1715,19 @@ function openRestore(){
   var canPlan=!!(S.plan && S.planEdited && S.planOriginal);
   var canLoad=!!(S.prevLoad && LOAD_KEYS.some(function(k){ return S.prevLoad[k]!==S.plannerRules[k]; }));
   var canProg=canUndoProgram();
-  if(!canPlan && !canLoad && !canProg){ toast('El plan ya está en su versión original.'); return; }
+  var canFill=!!(S.plan && S.planBeforeFill);
+  if(!canPlan && !canLoad && !canProg && !canFill){ toast('El plan ya está en su versión original.'); return; }
   var body='<div class="checklist">'+
     (canPlan?'<label><input type="radio" name="rst" value="plan" checked><span><strong>Deshacer los cambios manuales</strong><br><span class="small muted">Vuelve al plan como lo generó la app, sin lo que moviste, agregaste o eliminaste.</span></span></label>':'')+
     (canLoad?'<label><input type="radio" name="rst" value="load"'+(canPlan?'':' checked')+'><span><strong>Volver a la carga anterior</strong><br><span class="small muted">De '+esc(loadDesc(S.plannerRules))+' a '+esc(loadDesc(S.prevLoad))+', y regenerar el plan.</span></span></label>':'')+
     (canProg?'<label><input type="radio" name="rst" value="prog"'+(canPlan||canLoad?'':' checked')+'><span><strong>Volver al programa anterior</strong><br><span class="small muted">De '+esc(programName(S.program))+' a '+esc(programName(S.prevProgram.program))+', con el plan que tenía.</span></span></label>':'')+
+    (canFill?'<label><input type="radio" name="rst" value="fill"'+(canPlan||canLoad||canProg?'':' checked')+'><span><strong>Volver a lo que planifiqué a mano</strong><br><span class="small muted">Quita lo que completó el sistema y deja solo los términos que armaste.</span></span></label>':'')+
     '</div>';
   modal({title:'Restaurar', narrow:true, body:body, buttons:[{label:'Cancelar'},{label:'Restaurar',primary:true,onClick:function(b){
     var v=(b.querySelector('input[name=rst]:checked')||{}).value;
     if(v==='plan'){ S.plan=clone(S.planOriginal); S.planEdited=false; S.historyChanged=false; save(); renderAll(); toast('Plan original restaurado.'); }
     else if(v==='prog') undoProgram();
+    else if(v==='fill'){ S.plan=S.planBeforeFill; S.planBeforeFill=null; S.planOriginal=null; S.planEdited=true; session.editMode=true; save(); renderAll(); toast('Volviste a lo que planificaste a mano.'); }
     else if(v==='load'){ var prev=S.prevLoad; rememberLoad(); LOAD_KEYS.forEach(function(k){ S.plannerRules[k]=prev[k]; }); save(); session.editMode=false; regenerate(true); toast('Carga restaurada: '+loadDesc(S.plannerRules)+'.'); }
   }}]});
 }
@@ -2097,8 +2100,8 @@ function renderPlan(){
       '<li class="'+(cur?'done':'')+'"><b>2</b><div><strong>Currículo</strong><br><span class="muted small">'+(S.program&&!cur?'Este programa aún no tiene currículo. Cárgalo una vez y quedará guardado.':'Computer Engineering ya viene incluido.')+'</span></div></li>'+
       '</ol><p>El transcript es opcional: si el estudiante es nuevo, el plan se genera desde cero.</p><div class="row">'+
       (S.program&&!cur?'<button class="btn primary" data-action="open-curriculum">Cargar currículo</button>':'')+
-      (cur?'<button class="btn primary" data-action="regen">Generar plan</button>':'')+
-      '<button class="btn" data-action="open-transcript">Cargar transcript</button></div></div>';
+      (cur?'<button class="btn primary" data-action="regen">Generar plan</button><button class="btn" data-action="blank-plan">Plan en blanco</button>':'')+
+      '<button class="btn" data-action="open-transcript">Cargar transcript</button></div><p class="small muted">Con <strong>Plan en blanco</strong> armas tú los términos y, cuando quieras, el sistema completa el resto.</p></div>';
     return;
   }
   var edit=session.editMode;
@@ -2110,12 +2113,12 @@ function renderPlan(){
   if(canUndoProgram() && !S.prevProgram.hidden) html+='<div class="notice info"><span>Cambiaste de <strong>'+esc(programName(S.prevProgram.program))+'</strong> a <strong>'+esc(programName(S.program))+'</strong>.</span><button class="btn sm" data-action="undo-program">Deshacer cambio de programa</button><button class="btn link" data-action="hide-prevprog">Ocultar</button></div>';
   if(edit){
     html+='<div class="editbar"><strong>Editando el plan</strong><span class="small muted hint">Toca Editar en un curso para moverlo, cambiarlo o eliminarlo.</span><span class="spacer"></span>'+
-      '<button class="btn sm" data-action="restore">Restaurar</button><button class="btn sm primary" data-action="toggle-edit">Listo</button></div>';
+      '<button class="btn sm" data-action="complete-plan">Completar el resto</button><button class="btn sm" data-action="restore">Restaurar</button><button class="btn sm primary" data-action="toggle-edit">Listo</button></div>';
   } else {
     var credOpts=[3,4,6,7,9,10,12,13,14,15,16,18], clsOpts=[0,1,2,3,4,5,6,7];
     html+='<div class="toolbar"><button class="btn primary" data-action="toggle-edit">Editar plan</button>'+
-      '<button class="btn" data-action="fastest">Terminar antes</button>'+
-      ((S.planEdited || (S.prevLoad && LOAD_KEYS.some(function(k){ return S.prevLoad[k]!==S.plannerRules[k]; })))?'<button class="btn" data-action="restore">Restaurar</button>':'')+
+      (S.plan.blank?'<button class="btn" data-action="complete-plan">Completar el resto</button>':'<button class="btn" data-action="fastest">Terminar antes</button>')+
+      ((S.planEdited || S.planBeforeFill || (S.prevLoad && LOAD_KEYS.some(function(k){ return S.prevLoad[k]!==S.plannerRules[k]; })))?'<button class="btn" data-action="restore">Restaurar</button>':'')+
       '<div class="menu"><button class="btn" data-action="menu" aria-haspopup="true" aria-expanded="false">Descargar ▾</button><div class="menu-list" role="menu">'+
         '<button role="menuitem" data-action="pdf-plan">Plan (PDF)</button>'+
         '<button role="menuitem" data-action="pdf-audit">Hoja del currículo (PDF)</button>'+
@@ -2126,6 +2129,8 @@ function renderPlan(){
         '<button role="menuitem" data-action="compare">Comparar con otro programa</button>'+
         '<button role="menuitem" data-action="restore">Restaurar</button>'+
         '<button role="menuitem" data-action="regen">Regenerar plan</button>'+
+        '<button role="menuitem" data-action="blank-plan">Empezar plan en blanco</button>'+
+        '<button role="menuitem" data-action="complete-plan">Completar el resto automáticamente</button>'+
       '</div></div></div>';
     html+='<div class="loadbar"><span>Carga por término:</span><label>Créditos <select id="loadCr">'+credOpts.map(function(v){return '<option'+(v===Core.num(pr.maxCredits)?' selected':'')+'>'+v+'</option>';}).join('')+(credOpts.indexOf(Core.num(pr.maxCredits))<0?'<option selected>'+pr.maxCredits+'</option>':'')+'</select></label>'+
       '<label>Clases <select id="loadCl">'+clsOpts.map(function(v){return '<option value="'+v+'"'+(v===(Core.num(pr.maxCourses)||0)?' selected':'')+'>'+(v?v:'Sin límite')+'</option>';}).join('')+'</select></label>'+
@@ -2297,9 +2302,63 @@ function regenerate(silent){
   var plan;
   try{ plan=Core.generatePlan(cur, S.records, S.electiveSel, prEff(), exemptList()); }
   catch(err){ showError('No se pudo generar el plan', err); return; }
-  S.plan=plan; S.planOriginal=clone(plan); S.planEdited=false; S.historyChanged=false;
+  S.plan=plan; S.planOriginal=clone(plan); S.planEdited=false; S.historyChanged=false; S.planBeforeFill=null;
   save(); renderAll();
   if(!silent) toast('Plan generado: '+plan.terms.length+' términos.');
+}
+/* ---------------- Plan en blanco y completar automáticamente ---------------- */
+function startBlankPlan(){
+  var cur=curr(); if(!cur){ toast('Carga el currículo del programa primero.'); return; }
+  function go(){
+    fillRecordsFromCurriculum();
+    var pr=prEff(), terms=[];
+    // Si el estudiante tiene cursos en progreso (IP), el primer término los lleva ya puestos.
+    try{
+      var g=Core.generatePlan(cur, S.records, S.electiveSel, pr, exemptList());
+      var t0=g.terms[0];
+      if(t0 && t0.courses.length && t0.courses.every(function(c){ return c.fixed || c.grade==='IP'; })) terms.push(t0);
+    }catch(e){}
+    var start=terms.length ? Core.Terms.next(terms[0], pr.includeSummer) : {season:pr.startSeason, year:+pr.startYear};
+    terms.push({season:start.season, year:start.year, label:Core.Terms.label(start), courses:[]});
+    S.planBeforeFill=null;
+    S.plan={terms:terms, unscheduled:[], blank:true}; S.planOriginal=null; S.planEdited=true; S.historyChanged=false;
+    session.editMode=true; save(); renderAll();
+    toast('Plan en blanco listo. Agrega cursos y términos; cuando quieras, pulsa "Completar el resto".');
+  }
+  if(S.plan && S.plan.terms.some(function(t){ return t.courses.length; })){
+    modal({title:'Plan en blanco', narrow:true, body:'<p>Empezar un plan en blanco reemplaza el plan actual de este estudiante. ¿Deseas continuar?</p>',
+      buttons:[{label:'Cancelar'},{label:'Empezar en blanco',primary:true,onClick:go}]});
+  } else go();
+}
+/** Completa automáticamente lo que falta a partir de los términos que ya se planificaron a mano. */
+function completePlan(){
+  var cur=curr(); if(!cur || !S.plan){ toast('Carga el currículo del programa primero.'); return; }
+  var T=S.plan.terms, last=-1;
+  T.forEach(function(t,i){ if(t.courses.length) last=i; });
+  if(last<0){ regenerate(); return; }
+  var manual=clone(T.slice(0,last+1));
+  var pseudo=[], codes={}, slots={};
+  manual.forEach(function(t){ t.courses.forEach(function(c){
+    codes[c.code]=true; if(c.slot) slots[c.slot]=true; if(c.placeholder) slots[c.code]=true;
+    pseudo.push({id:Core.uid(), code:c.code, title:c.name||'', credits:Core.num(c.credits), grade:'P', term:t.label, order:9000+pseudo.length});
+  }); });
+  var lt=manual[manual.length-1], nt=Core.Terms.next(lt, S.plannerRules.includeSummer);
+  var pr=Object.assign({}, prEff(), {startSeason:nt.season, startYear:nt.year});
+  var g;
+  try{ g=Core.generatePlan(cur, S.records.concat(pseudo), S.electiveSel, pr, exemptList()); }
+  catch(err){ showError('No se pudo completar el plan', err); return; }
+  var added=0;
+  g.terms.forEach(function(t){
+    t.courses=t.courses.filter(function(c){ return !codes[c.code] && !(c.slot && slots[c.slot]) && !(c.placeholder && slots[c.code]); });
+    added+=t.courses.length;
+  });
+  var rest=g.terms.filter(function(t){ return t.courses.length; });
+  if(!added){ toast('No falta nada por planificar: el plan ya tiene todos los cursos.'); return; }
+  S.planBeforeFill=clone(S.plan);
+  S.plan={terms:manual.concat(rest), unscheduled:g.unscheduled, blank:false};
+  S.planOriginal=clone(S.plan); S.planEdited=false; S.historyChanged=false;
+  session.editMode=false; save(); renderAll();
+  toast('Plan completado: se añadieron '+added+' cursos en '+rest.length+' términos.');
 }
 function regenWithConfirm(){
   if(S.planEdited){
@@ -2929,7 +2988,8 @@ function moveCourse(uid, target, selectEl){
 function openAddCourse(ti){
   var cur=curr(); var st=Core.buildStatus(cur,S.records,S.plannerRules);
   var inPlan={}; S.plan.terms.forEach(function(t){ t.courses.forEach(function(c){ inPlan[c.code]=true; }); });
-  var avail=cur.courses.filter(function(c){ return c.type!=='ELEC' && !st.approved[c.code] && !inPlan[c.code]; });
+  S.plan.terms.forEach(function(t){ t.courses.forEach(function(c){ if(c.slot) inPlan[c.slot]=true; }); });
+  var avail=cur.courses.filter(function(c){ return c.type==='ELEC' ? (!inPlan[c.code] && !(st.slots[c.code] && st.slots[c.code].status!=='pending')) : (!st.approved[c.code] && !inPlan[c.code]); });
   var body='<div class="field">Curso del currículo<select data-pick><option value="">Curso que no está en el currículo…</option>'+
     avail.map(function(c){return '<option value="'+esc(c.code)+'">'+esc(c.code+' '+c.name+' ('+fmtCr(c.credits)+' cr)')+'</option>';}).join('')+'</select></div>'+
     '<div data-custom><div class="grid2"><label class="field">Código<input data-code placeholder="ABCD 1234"></label><label class="field">Créditos<input data-cr inputmode="decimal"></label></div>'+
@@ -2939,7 +2999,7 @@ function openAddCourse(ti){
     var code=b.querySelector('[data-pick]').value, course;
     if(code){
       var c=cur.courses.filter(function(x){return x.code===code;})[0];
-      course={uid:Core.uid(),code:c.code,name:c.name,credits:c.credits,type:c.type,prereqs:c.prereqs,coreqs:c.coreqs,prereqText:c.prereqText,grade:'',placeholder:false,fixed:false};
+      course={uid:Core.uid(),code:c.code,name:c.name,credits:c.credits,type:c.type,prereqs:c.prereqs,coreqs:c.coreqs,prereqText:c.prereqText,grade:'',placeholder:c.type==='ELEC',slot:c.type==='ELEC'?c.code:undefined,group:c.group,fixed:false};
     } else {
       var cc=b.querySelector('[data-code]').value.trim(), cr=Core.num(b.querySelector('[data-cr]').value);
       if(!cc){ b.querySelector('[data-msg]').innerHTML='<div class="notice bad">Escribe el código del curso.</div>'; return false; }
@@ -3439,6 +3499,8 @@ document.addEventListener('click',function(e){
   else if(a==='open-settings') openSettings();
   else if(a==='new-student') newStudent();
   else if(a==='regen') regenWithConfirm();
+  else if(a==='blank-plan') startBlankPlan();
+  else if(a==='complete-plan') completePlan();
   else if(a==='toggle-edit'){ session.editMode=!session.editMode; renderPlan(); }
   else if(a==='restore') openRestore();
   else if(a==='plan-all'){ S.planTerms=0; save(); renderAll(); }
