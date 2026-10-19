@@ -1270,8 +1270,11 @@ var Core = (function () {
       plan.terms.forEach(function (t, i) { if (t.courses.some(function (x) { return x.type === 'CAP' && x.uid !== course.uid; })) capAt = i; });
       if (course.type !== 'CAP' && capAt >= 0 && targetIdx > capAt)
         warnings.push(course.code + ' quedaría después del capstone. La regla es que el capstone sea lo último del plan.');
-      if (course.type === 'CAP' && plan.terms.some(function (t, i) { return i > targetIdx && t.courses.some(function (x) { return x.uid !== course.uid && x.type !== 'CAP'; }); }))
-        warnings.push('Después de ' + target.label + ' quedan otros cursos. La regla es que el capstone sea lo último del plan.');
+      if (course.type === 'CAP') {
+        var lastCap = Math.max(capAt, targetIdx);
+        if (plan.terms.some(function (t, i) { return i > lastCap && t.courses.some(function (x) { return x.uid !== course.uid && x.type !== 'CAP'; }); }))
+          warnings.push('Después de ' + target.label + ' quedan otros cursos. La regla es que el capstone sea lo último del plan.');
+      }
     }
     return warnings;
   }
