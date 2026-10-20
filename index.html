@@ -2619,7 +2619,7 @@ function auditBody(){
   var reqs=function(list){ return (list||[]).map(function(ors){ return ors.map(function(x){ return '<span class="rq'+(st.approved[x]?' met':'')+'">'+esc(x)+'</span>'; }).join(' o '); }).join(', '); };
   var html='<div class="sheet">'+
     '<div class="sh-head"><div><div class="sh-uni">Polytechnic University of Puerto Rico</div><div class="sh-title">'+esc(currentBase())+' Degree Audit'+(specLabel(S.program)?' <span style="font-weight:500">- '+esc(specLabel(S.program))+'</span>':'')+'</div>'+
-    '<div class="sh-meta"><span>Estudiante: <b>'+esc(S.student.name||'—')+'</b></span><span>Núm.: <b>'+esc(S.student.id||'—')+'</b></span><span>Fecha: <b>'+dstr+'</b></span><span>GPA: <b>'+fmt(a.gpa)+'</b></span></div></div>'+
+    '<div class="sh-meta"><span>Estudiante: <b>'+esc(S.student.name||'—')+'</b></span><span>Núm.: <b>'+esc(S.student.id||'—')+'</b></span><span>Fecha: <b>'+dstr+'</b></span><span>GPA: <b>'+fmt(a.gpa)+'</b></span><span>Graduación estimada: <b>'+esc(String(a.grad).replace(' *',''))+'</b></span></div></div>'+
     '<div class="sh-legend"><span class="lg s-ok">Aprobado</span><span class="lg s-fail">Fracasado</span><span class="lg s-ip">En progreso</span><span class="lg s-inc">Incompleto</span></div></div>'+
     '<table class="sh"><colgroup><col style="width:104px"><col style="width:108px"><col><col style="width:42px"><col style="width:52px"><col style="width:86px"><col style="width:150px"><col style="width:104px"></colgroup>'+
     '<thead><tr><th></th><th>Curso</th><th>Título</th><th class="c">Crs.</th><th class="c">Nota</th><th>Trimestre</th><th>Prerrequisito</th><th>Correquisito</th></tr></thead>';
@@ -3209,7 +3209,10 @@ function exportAuditPDF(){
   doc.text(pdfSafe(currentBase()+' Degree Audit'+(specLabel(S.program)?' - '+specLabel(S.program):'')), M, 58+OY-14);
   doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(59,72,85);
   var d=new Date(); var ds=('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+'/'+d.getFullYear();
-  doc.text('Estudiante: '+pdfSafe(S.student.name||'-')+'      Núm. de estudiante: '+pdfSafe(S.student.id||'-')+'      Fecha: '+ds+'      GPA: '+fmt(a.gpa)+'      Créditos: '+fmtCr(cur.requiredCredits-(a.pending||0))+' de '+fmtCr(cur.requiredCredits)+' aprobados', M, 74+OY-14);
+  var gradTxt=pdfSafe(String(a.grad).replace(' *',''));
+  var hdr='Estudiante: '+pdfSafe(S.student.name||'-')+'     Núm.: '+pdfSafe(S.student.id||'-')+'     Fecha: '+ds+'     GPA: '+fmt(a.gpa)+'     Créditos: '+fmtCr(cur.requiredCredits-(a.pending||0))+' de '+fmtCr(cur.requiredCredits)+' aprobados     Graduación estimada: '+gradTxt;
+  var hs=10; while(hs>7.5 && doc.getTextWidth(hdr)*(hs/doc.getFontSize())>W-2*M){ hs-=0.5; }
+  doc.setFontSize(hs); doc.text(hdr, M, 74+OY-14); doc.setFontSize(10);
   var legend=[['Aprobado',[231,242,236]],['Fracasado',[248,230,231]],['En progreso',[230,238,246]],['Incompleto',[251,240,222]]];
   var lx=W-M-4*78; legend.forEach(function(l,i){ doc.setFillColor.apply(doc,l[1]); doc.rect(lx+i*78,36+OY,10,10,'F'); doc.setFontSize(8.5); doc.text(l[0], lx+i*78+14, 44+OY); });
   var body=[], status=[];
@@ -3245,7 +3248,7 @@ function exportAuditPDF(){
     didParseCell:function(data){ if(data.section!=='body') return; var s=status[data.row.index]; if(fills[s]) data.cell.styles.fillColor=fills[s]; }});
   var y=doc.lastAutoTable.finalY+16; if(y>530){ doc.addPage(); y=LH_TOP+10; }
   doc.setFontSize(10); doc.setTextColor(28,42,57);
-  doc.text('Créditos del programa: '+fmtCr(cur.requiredCredits)+'     Aprobados: '+fmtCr(cur.requiredCredits-(a.pending||0))+'     Faltan: '+fmtCr(a.pending||0), M, y);
+  doc.text('Créditos del programa: '+fmtCr(cur.requiredCredits)+'     Aprobados: '+fmtCr(cur.requiredCredits-(a.pending||0))+'     Faltan: '+fmtCr(a.pending||0)+'     Graduación estimada: '+gradTxt, M, y);
   pdfSignature(doc, y);
   pdfLetterhead(doc);
   saveFile(fileBase()+' - Curriculo.pdf', doc.output('blob'));
