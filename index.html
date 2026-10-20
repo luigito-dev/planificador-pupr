@@ -1580,6 +1580,7 @@ function academicSummary(){
   if(S.plan){
     var nonEmpty=S.plan.terms.filter(function(t){return t.courses.length;});
     if(nonEmpty.length) out.grad = tS(nonEmpty[nonEmpty.length-1].label) + (S.plan.unscheduled.length?' *':'');
+    if(nonEmpty.length && missingCourses().length) out.grad='Plan incompleto';
   }
   return out;
 }
@@ -1742,6 +1743,41 @@ function alertsHTML(){
     al.map(function(a){ return '<li class="al-'+a.lvl+'">'+esc(a.t)+'</li>'; }).join('')+'</ul></details>';
 }
 
+/** Cursos del currículo que el estudiante aún necesita y que no están en ningún trimestre del plan. */
+function missingCourses(){
+  var cur=curr(); if(!cur || !S.plan) return [];
+  var st=Core.buildStatus(cur,S.records,S.plannerRules), ex=exemptList(), inPlan={}, slotsIn={}, groupFill={}, byCode={};
+  cur.courses.forEach(function(c){ byCode[c.code]=c; });
+  S.plan.terms.forEach(function(t){ t.courses.forEach(function(c){
+    inPlan[c.code]=true; if(c.slot) slotsIn[c.slot]=true; if(c.placeholder) slotsIn[c.code]=true;
+    var o=byCode[c.code];
+    if(o && o.type==='OPC' && !c.slot && !st.approved[c.code]) groupFill[o.group]=(groupFill[o.group]||0)+1;   // opción escogida a mano
+  }); });
+  (S.plan.unscheduled||[]).forEach(function(u){ inPlan[u.code]=true; });
+  var out=[];
+  cur.courses.forEach(function(c){
+    if(c.type==='OPC') return;
+    if(c.type==='ELEC'){
+      var s=st.slots[c.code]; if(s && s.status!=='pending') return;
+      if(slotsIn[c.code]) return;
+      if(groupFill[c.group]>0){ groupFill[c.group]--; return; }
+      out.push(c); return;
+    }
+    var s2=st.byCode[c.code]; if(s2 && s2.status!=='pending') return;
+    if(c.type==='PREP' && ex.indexOf(c.code)>=0) return;
+    if(inPlan[c.code]) return;
+    out.push(c);
+  });
+  return out;
+}
+function missingHTML(){
+  var miss=missingCourses(); if(!miss.length) return '';
+  var cr=miss.reduce(function(s,c){ return s+Core.num(c.credits); },0), sg=slotGroupMap(curr());
+  return '<details class="alerts soft" id="missBox"'+(session.missOpen?' open':'')+'><summary><strong>Faltan '+miss.length+' curso'+(miss.length>1?'s':'')+' ('+fmtCr(cr)+' créditos) por planificar</strong> <span class="chg">Ver lista</span></summary>'+
+    '<table class="plain" style="margin-top:8px"><thead><tr><th>Curso</th><th>Descripción</th><th class="num">Créditos</th><th>Prerrequisito</th></tr></thead><tbody>'+
+    miss.map(function(c){ return '<tr><td><strong>'+esc(c.code)+'</strong></td><td>'+esc(c.name||'')+(c.type==='ELEC'?' '+elecTag(c.group):'')+(c.type==='PREP'?' <span class="tag">preparatorio</span>':'')+'</td><td class="num">'+fmtCr(c.credits)+'</td><td class="small muted">'+esc(c.prereqText||'')+'</td></tr>'; }).join('')+
+    '</tbody></table><div class="row" style="margin-top:10px"><button class="btn sm primary" data-action="complete-plan">Completar el resto automáticamente</button></div></details>';
+}
 /* ---------------- Trimestres a planificar ---------------- */
 /** Índices de los trimestres que se muestran (los primeros N con cursos). 0 = todos. */
 function planWindow(edit){
@@ -2245,7 +2281,7 @@ function renderPlan(){
   }
     var loadSum=pr.maxCredits+' créditos'+(Core.num(pr.maxCourses)?' · máx. '+pr.maxCourses+' clases':'')+(pr.includeSummer?' · con Summer':' · sin Summer')+(Core.num(S.planTerms)?' · '+S.planTerms+' trimestres':'');
     html+='<details class="loadbox" id="loadBox"'+(session.loadOpen?' open':'')+'><summary><span class="muted">Carga por trimestre:</span> <strong>'+esc(loadSum)+'</strong> <span class="chg">Cambiar</span></summary>'+loadIn+'</details>';
-  html+=alertsHTML();
+  html+=alertsHTML()+missingHTML();
   if(S.historyChanged) html+='<div class="notice info">El plan tiene cambios manuales y el historial o las reglas cambiaron. Los cursos aprobados y las electivas ya se actualizaron; regenera solo si quieres reorganizar todo.<button class="btn link" data-action="regen">Regenerar plan</button></div>';
   if(pendingSlots) html+='<div class="notice">'+pendingSlots+' electiva'+(pendingSlots>1?'s':'')+' por seleccionar.<button class="btn link" data-action="open-audit">Escoger en el currículo</button></div>';
   if(S.plan.unscheduled.length) html+='<div class="notice bad"><strong>Cursos que no se pudieron ubicar</strong><ul>'+
@@ -3354,9 +3390,10 @@ function pdfFooter(doc, W, H){
 }
 var SIGNER_DEFAULT={name:'', title:'Consejero en Rehabilitación', dept:'Centro de Servicios de Consejería, Psicología y Bienestar Estudiantil'};
 /** Pregunta antes de descargar si se incluye la firma del consejero al final. */
-function askPDF(fn){
-  var sg=Object.assign({}, SIGNER_DEFAULT, S.signer||{}), on=!!S.signOn;
-  var body='<div class="checklist"><label><input type="checkbox" data-sg-on'+(on?' checked':'')+'><span><strong>Incluir firma del consejero al final</strong><br><span class="small muted">Añade espacio para firmar y la fecha.</span></span></label></div>'+
+function askPDF(fn, opts){
+  opts=opts||{};
+  var sg=Object.assign({}, SIGNER_DEFAULT, S.signer||{}), on=!!S.signOn, nMiss=opts.missing?missingCourses().length:0;
+  var body=(nMiss?'<div class="checklist" style="margin-bottom:8px"><label><input type="checkbox" data-miss'+(S.missOn===false?'':' checked')+'><span><strong>Incluir los cursos que faltan por planificar ('+nMiss+')</strong><br><span class="small muted">Lista al final con los cursos que todavía no están en ningún trimestre.</span></span></label></div>':'')+'<div class="checklist"><label><input type="checkbox" data-sg-on'+(on?' checked':'')+'><span><strong>Incluir firma del consejero al final</strong><br><span class="small muted">Añade espacio para firmar y la fecha.</span></span></label></div>'+
     '<div data-sg-fields style="margin-top:12px"'+(on?'':' class="hidden"')+'>'+
     '<label class="field">Nombre del consejero (opcional)<input data-sg="name" value="'+esc(sg.name)+'" placeholder="Ej. Luis Rivera"></label>'+
     '<label class="field">Puesto<input data-sg="title" value="'+esc(sg.title)+'"></label>'+
@@ -3364,9 +3401,10 @@ function askPDF(fn){
   var m=modal({title:'Descargar PDF', narrow:true, body:body, buttons:[{label:'Cancelar'},{label:'Descargar',primary:true,onClick:function(b){
     var chk=b.querySelector('[data-sg-on]').checked, nv={};
     b.querySelectorAll('[data-sg]').forEach(function(i){ nv[i.getAttribute('data-sg')]=i.value.trim(); });
+    var mb=b.querySelector('[data-miss]'); if(mb){ S.missOn=mb.checked; }
     S.signOn=chk; S.signer=nv; save();
-    session.sign=chk;
-    try{ fn(); } finally { session.sign=false; }
+    session.sign=chk; session.includeMissing=!!(mb && mb.checked);
+    try{ fn(); } finally { session.sign=false; session.includeMissing=false; }
   }}]});
   var cb=m.body.querySelector('[data-sg-on]'), fl=m.body.querySelector('[data-sg-fields]');
   cb.addEventListener('change',function(){ fl.classList.toggle('hidden', !cb.checked); });
@@ -3481,6 +3519,17 @@ function exportPlanPDF(){
     }));
     y=doc.lastAutoTable.finalY+24;
   });
+  var missP=session.includeMissing?missingCourses():[];
+  if(missP.length){
+    if(y>640){ doc.addPage(); y=LH_TOP+10; }
+    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(28,42,57); doc.text('Cursos que faltan por planificar', 54, y);
+    doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(100,110,120);
+    doc.text(missP.length+' cursos, '+fmtCr(missP.reduce(function(s,c){return s+Core.num(c.credits);},0))+' créditos', 612-54, y, {align:'right'});
+    doc.autoTable(Object.assign({}, TABLE_STYLE, {startY:y+6, head:[['Curso','Descripción','Créditos','Prerrequisito']],
+      body:missP.map(function(c){ return [c.code, pdfSafe(c.name)+(c.type==='ELEC'?' ['+elecKind(c.group)[1]+']':'')+(c.type==='PREP'?' (preparatorio)':''), fmtCr(c.credits), pdfSafe(c.prereqText||'')]; }),
+      columnStyles:{0:{cellWidth:70,fontStyle:'bold'},2:{cellWidth:50,halign:'right'},3:{cellWidth:130}}}));
+    y=doc.lastAutoTable.finalY+24;
+  }
   if(winP.limited){
     if(y>640){ doc.addPage(); y=LH_TOP+10; }
     doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(28,42,57); doc.text('Cursos pendientes para trimestres futuros', 54, y);
@@ -3629,7 +3678,7 @@ document.addEventListener('click',function(e){
   else if(a==='electives') openElectives();
   else if(a==='preps') openPreps();
   else if(a==='view-transcript') viewTranscript();
-  else if(a==='pdf-plan') askPDF(exportPlanPDF);
+  else if(a==='pdf-plan') askPDF(exportPlanPDF,{missing:true});
   else if(a==='pdf-transcript') askPDF(exportTranscriptPDF);
   else if(a==='edit-course') openCourseEditor(btn.closest('tr').getAttribute('data-uid'));
   else if(a==='edit-term') openTermEditor(+btn.closest('.term').getAttribute('data-term'));
@@ -3639,7 +3688,7 @@ document.addEventListener('click',function(e){
   else if(a==='add-rec') openRecordEditor(null);
 });
 document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeMenus(); if(e.key==='Enter' && e.target && e.target.id==='gpaEdit') e.target.blur(); });
-document.addEventListener('toggle',function(e){ if(e.target.id==='rulesBox') session.rulesOpen=e.target.open; if(e.target.id==='alertsBox') session.alertsOpen=e.target.open; if(e.target.id==='loadBox') session.loadOpen=e.target.open; },true);
+document.addEventListener('toggle',function(e){ if(e.target.id==='rulesBox') session.rulesOpen=e.target.open; if(e.target.id==='alertsBox') session.alertsOpen=e.target.open; if(e.target.id==='loadBox') session.loadOpen=e.target.open; if(e.target.id==='missBox') session.missOpen=e.target.open; },true);
 document.addEventListener('change',function(e){
   var t=e.target;
   if(t.id==='stName'){ S.student.name=t.value.trim(); save(); return; }
