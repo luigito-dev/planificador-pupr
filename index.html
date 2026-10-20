@@ -1370,6 +1370,7 @@ function load(){
     var mig=function(o){ if(o && o.useOfficialGPA && o.officialGPA!=null && o.gpaOverride==null){ o.gpaOverride=o.officialGPA; o.useOfficialGPA=false; } };
     mig(s); Object.keys(s.roster||{}).forEach(function(k){ mig(s.roster[k]); });
     ['customOptions','prepExempt','offerOverrides','curricula'].forEach(function(key){ var m=s[key]; if(!m) return; Object.keys(REN).forEach(function(o){ if(m[o] && !m[REN[o]]){ m[REN[o]]=m[o]; } delete m[o]; }); });
+    if(s.wizardSeen==null) s.wizardSeen = !!(s.plan || Object.keys(s.roster||{}).some(function(k){ return s.roster[k] && s.roster[k].plan; }));
     s.gpaRules = Object.assign({}, Core.DEFAULT_GPA_RULES);   // regla de GPA de PUPR: interna, no se edita
     return s;
   }catch(e){ return null; }
@@ -2130,6 +2131,18 @@ function renderTabs(){
 
 /* ---------------- Inicio guiado: estudiante → historial → plan ---------------- */
 function autoRegen(){ if(curr() && S.plan) regenerate(true); else renderAll(); }
+function quickStartHTML(){
+  var cur=curr(), grp=groupByName(currentBase()), msg, btns='';
+  if(!currentBase()) msg='Escoge arriba el <strong>programa</strong> del estudiante para empezar.';
+  else if(grp && !S.program) msg='Escoge arriba la <strong>especialidad</strong> de '+esc(currentBase())+'.';
+  else if(!cur) msg='Este programa aún no tiene currículo. <button class="btn link" data-action="open-curriculum">Cargar currículo</button>';
+  else {
+    msg='Este estudiante aún no tiene plan.'+(S.records.length?' Historial cargado: <strong>'+S.records.length+' cursos</strong>.':'');
+    btns='<div class="row" style="margin-top:12px"><button class="btn primary" data-action="regen">Generar plan</button><button class="btn" data-action="blank-plan">Plan en blanco</button>'+
+      '<button class="btn" data-action="open-transcript">'+(S.records.length?'Cambiar transcript':'Subir transcript')+'</button><button class="btn" data-action="open-audit">Marcar cursos a mano</button></div>';
+  }
+  return '<div class="empty" style="padding:20px 0 8px"><p style="margin:0;color:var(--ink);font-size:16px">'+msg+'</p>'+btns+'</div>';
+}
 function wizardHTML(){
   var cur=curr(), grp=groupByName(currentBase());
   var s1 = !!(S.program && cur);
@@ -2178,13 +2191,13 @@ function openHelp(){
     sec('5. Descargar y guardar',[ '<strong>Descargar PDF</strong> crea el plan, la hoja del currículo o el transcript con el membrete. Puedes incluir tu firma.',
       'Los estudiantes se guardan solos <strong>en este navegador</strong>. En <strong>Estudiantes → Exportar respaldo</strong> guardas una copia; guárdala en tu OneDrive de PUPR.' ])+
     sec('6. GPA',[ 'Se calcula con la regla de PUPR. Si el oficial es distinto, toca el GPA para escribirlo; <strong>restaurar</strong> vuelve al calculado.' ]);
-  modal({title:'Cómo usar el planificador', body:body, buttons:[{label:'Entendido',primary:true}]});
+  modal({title:'Cómo usar el planificador', body:body, buttons:[{label:'Ver el inicio guiado', left:true, onClick:function(){ session.showWizard=true; if(S.plan){ toast('El inicio guiado sale cuando abres un estudiante sin plan (Nuevo estudiante).'); } renderAll(); }},{label:'Entendido',primary:true}]});
 }
 /* ---------------- Plan ---------------- */
 function renderPlan(){
   var cur=curr(), el=$('panel'), pr=prEff();
   if(!cur || !S.plan){
-    el.innerHTML=wizardHTML();
+    el.innerHTML=(S.wizardSeen && !session.showWizard)?quickStartHTML():wizardHTML();
     return;
   }
   var edit=session.editMode;
@@ -2389,7 +2402,7 @@ function regenerate(silent){
   var plan;
   try{ plan=Core.generatePlan(cur, S.records, S.electiveSel, prEff(), exemptList()); }
   catch(err){ showError('No se pudo generar el plan', err); return; }
-  S.plan=plan; S.planOriginal=clone(plan); S.planEdited=false; S.historyChanged=false; S.planBeforeFill=null;
+  S.plan=plan; S.planOriginal=clone(plan); S.planEdited=false; S.historyChanged=false; S.planBeforeFill=null; S.wizardSeen=true; session.showWizard=false;
   save(); renderAll();
   if(!silent) toast('Plan generado: '+plan.terms.length+' trimestres.');
 }
@@ -2408,7 +2421,7 @@ function startBlankPlan(){
     var start=terms.length ? Core.Terms.next(terms[0], pr.includeSummer) : {season:pr.startSeason, year:+pr.startYear};
     terms.push({season:start.season, year:start.year, label:Core.Terms.label(start), courses:[]});
     S.planBeforeFill=null;
-    S.plan={terms:terms, unscheduled:[], blank:true}; S.planOriginal=null; S.planEdited=true; S.historyChanged=false;
+    S.plan={terms:terms, unscheduled:[], blank:true}; S.planOriginal=null; S.planEdited=true; S.historyChanged=false; S.wizardSeen=true; session.showWizard=false;
     session.editMode=true; save(); renderAll();
     toast('Plan en blanco listo. Agrega cursos y trimestres; cuando quieras, pulsa "Completar el resto".');
   }
