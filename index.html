@@ -323,6 +323,19 @@ header.top .help{border-color:var(--line)}
   header.top .btn{font-size:13px;padding:6px 5px}
   header.top .brand b{display:none}
 }
+
+/* Agregar varios cursos */
+.ac-list{max-height:46vh;overflow:auto;border:1px solid var(--line);border-radius:8px}
+.ac-sec{background:var(--soft);font-size:12.5px;font-weight:600;color:var(--muted);padding:6px 10px;border-bottom:1px solid var(--line)}
+.ac-row{display:grid;grid-template-columns:auto 1fr auto;grid-template-areas:"cb main cr" "cb st st";gap:2px 10px;padding:8px 10px;border-bottom:1px solid var(--line);cursor:pointer;font-size:14px;align-items:center}
+.ac-row:hover{background:var(--soft)}
+.ac-row input{grid-area:cb;width:18px;height:18px}
+.ac-main{grid-area:main}.ac-cr{grid-area:cr;color:var(--muted);font-size:13px;white-space:nowrap}
+.ac-st{grid-area:st;font-size:12.5px;color:var(--muted)}.ac-st:empty{display:none}.ac-st.bad{color:var(--warn)}
+.ac-sum{font-size:14px;margin:0 0 8px;color:var(--muted)}
+.warnpop{position:fixed;right:16px;top:16px;z-index:70;max-width:360px;background:#fff8e6;color:#5c3d00;border:1px solid #f0c36d;border-left:4px solid var(--warn);border-radius:10px;padding:10px 14px;font-size:14px;box-shadow:0 10px 30px rgba(0,0,0,.15);cursor:pointer}
+.warnpop strong{display:block;margin-bottom:2px}
+@media (max-width:680px){ .warnpop{left:12px;right:12px;max-width:none} }
 @media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -2241,7 +2254,7 @@ function openHelp(){
       'En <strong>Carga</strong> cambias los créditos o clases por trimestre, el Summer y cuántos trimestres mostrar.',
       'Las <strong>alertas</strong> avisan de probatoria, cursos sin ubicar o reglas que no se cumplen. Tócalas para ver el detalle.' ])+
     sec('3. Cambiar el plan',[ 'Toca <strong>Editar plan</strong>. En cada curso, <strong>Editar</strong> sirve para moverlo de trimestre o quitarlo.',
-      'Con <strong>+ Agregar curso</strong> y <strong>+ Agregar trimestre</strong> armas el plan a tu manera.',
+      'Con <strong>+ Agregar curso</strong> marcas varias clases a la vez para un trimestre; si alguna no cumple un prerrequisito sale un aviso, pero se agrega igual. Con <strong>+ Agregar trimestre</strong> añades más trimestres.',
       'Los cursos que escoges o mueves a mano quedan marcados como <span class="tag k-fijo">fijo</span>. Al generar el plan otra vez puedes <strong>mantenerlos</strong> en su trimestre o empezar de cero.',
       '<strong>Completar el resto</strong> deja lo que pusiste y el sistema planifica lo que falta.',
       'Si algo no te gusta, <strong>Restaurar</strong> lo deshace.' ])+
@@ -3178,36 +3191,95 @@ function moveCourse(uid, target, selectEl){
   if(w.length) confirmWarnings(w, doIt, function(){ if(selectEl) selectEl.value=String(f.ti); });
   else doIt();
 }
+/** Aviso breve que desaparece solo (no bloquea). */
+function warnPop(lines){
+  var old=document.querySelector('.warnpop'); if(old) old.remove();
+  var w=document.createElement('div'); w.className='warnpop'; w.setAttribute('role','status');
+  w.innerHTML='<strong>Aviso</strong>'+lines.map(function(l){ return '<div>'+esc(l)+'</div>'; }).join('');
+  document.body.appendChild(w);
+  clearTimeout(warnPop._t); warnPop._t=setTimeout(function(){ w.remove(); }, 5500);
+  w.addEventListener('click',function(){ w.remove(); });
+}
 function openAddCourse(ti){
   var cur=curr(); var st=Core.buildStatus(cur,S.records,S.plannerRules);
-  var inPlan={}; S.plan.terms.forEach(function(t){ t.courses.forEach(function(c){ inPlan[c.code]=true; }); });
-  S.plan.terms.forEach(function(t){ t.courses.forEach(function(c){ if(c.slot) inPlan[c.slot]=true; }); });
-  var avail=cur.courses.filter(function(c){ return c.type==='ELEC' ? (!inPlan[c.code] && !(st.slots[c.code] && st.slots[c.code].status!=='pending')) : (!st.approved[c.code] && !inPlan[c.code]); });
-  var body='<div class="field">Curso del currículo<select data-pick><option value="">Curso que no está en el currículo…</option>'+
-    avail.map(function(c){return '<option value="'+esc(c.code)+'">'+esc(c.code+' '+c.name+' ('+fmtCr(c.credits)+' cr)')+'</option>';}).join('')+'</select></div>'+
-    '<div data-custom><div class="grid2"><label class="field">Código<input data-code placeholder="ABCD 1234"></label><label class="field">Créditos<input data-cr inputmode="decimal"></label></div>'+
-    '<label class="field">Descripción<input data-name></label><label class="field">Prerrequisitos (opcional)<input data-pre placeholder="Separados por coma"></label></div>'+
-    '<label class="field">Trimestre<select data-term>'+S.plan.terms.map(function(t,i){return '<option value="'+i+'"'+(i===ti?' selected':'')+'>'+esc(tS(t.label))+'</option>';}).join('')+'</select></label><div data-msg></div>';
-  var m=modal({title:'Agregar curso', body:body, buttons:[{label:'Cancelar'},{label:'Agregar',primary:true,onClick:function(b){
-    var code=b.querySelector('[data-pick]').value, course;
-    if(code){
-      var c=cur.courses.filter(function(x){return x.code===code;})[0];
-      course={uid:Core.uid(),code:c.code,name:c.name,credits:c.credits,type:c.type,prereqs:c.prereqs,coreqs:c.coreqs,prereqText:c.prereqText,grade:'',placeholder:c.type==='ELEC',slot:c.type==='ELEC'?c.code:undefined,group:c.group,fixed:false};
-    } else {
-      var cc=b.querySelector('[data-code]').value.trim(), cr=Core.num(b.querySelector('[data-cr]').value);
-      if(!cc){ b.querySelector('[data-msg]').innerHTML='<div class="notice bad">Escribe el código del curso.</div>'; return false; }
+  var inPlan={}; S.plan.terms.forEach(function(t){ t.courses.forEach(function(c){ inPlan[c.code]=true; if(c.slot) inPlan[c.slot]=true; }); });
+  var avail=cur.courses.filter(function(c){ return c.type==='ELEC' ? (!inPlan[c.code] && !(st.slots[c.code] && st.slots[c.code].status!=='pending')) : (!st.approved[c.code] && !st.ip[c.code] && !inPlan[c.code]); })
+    .filter(function(c){ return !(c.type==='PREP' && exemptList().indexOf(c.code)>=0); });
+  var sec='', items='';
+  avail.forEach(function(c,i){
+    if(c.section!==sec){ sec=c.section; items+='<div class="ac-sec">'+esc(sec)+'</div>'; }
+    items+='<label class="ac-row" data-i="'+i+'" data-q="'+esc((c.code+' '+c.name).toLowerCase())+'"><input type="checkbox" data-ac="'+i+'">'+
+      '<span class="ac-main"><strong>'+esc(c.code)+'</strong> '+esc(c.name||'')+(c.type==='ELEC'?' '+elecTag(c.group):'')+(c.type==='OPC'?' '+elecTag(c.group):'')+'</span>'+
+      '<span class="ac-cr">'+fmtCr(c.credits)+' cr</span><span class="ac-st" data-st="'+i+'"></span></label>';
+  });
+  var body='<div class="grid2"><label class="field">Trimestre<select data-term>'+S.plan.terms.map(function(t,i){return '<option value="'+i+'"'+(i===ti?' selected':'')+'>'+esc(tS(t.label))+' ('+fmtCr(Core.termCredits(t))+' cr)</option>';}).join('')+'</select></label>'+
+    '<label class="field">Buscar<input data-find placeholder="Código o nombre"></label></div>'+
+    '<div class="ac-sum" data-sum></div>'+
+    '<div class="ac-list">'+(items||'<p class="muted small">No quedan cursos del currículo por añadir.</p>')+'</div>'+
+    '<details class="more" style="margin-top:10px"><summary>Curso que no está en el currículo</summary>'+
+    '<div class="grid2"><label class="field">Código<input data-code placeholder="ABCD 1234"></label><label class="field">Créditos<input data-cr inputmode="decimal"></label></div>'+
+    '<label class="field">Descripción<input data-name></label><label class="field">Prerrequisitos (opcional)<input data-pre placeholder="Separados por coma"></label></details>';
+  var m=modal({title:'Agregar cursos', body:body, buttons:[{label:'Cancelar'},{label:'Agregar',primary:true,onClick:function(b){
+    var t=+b.querySelector('[data-term]').value, picked=sel(), add=[];
+    picked.forEach(function(i){ var c=avail[i];
+      add.push({uid:Core.uid(),code:c.code,name:c.name,credits:c.credits,type:c.type,prereqs:c.prereqs,coreqs:c.coreqs,prereqText:c.prereqText,grade:'',placeholder:c.type==='ELEC',slot:c.type==='ELEC'?c.code:undefined,group:c.group,offer:c.offer||null,fixed:false,pinned:true}); });
+    var cc=b.querySelector('[data-code]').value.trim();
+    if(cc){
       var pre=b.querySelector('[data-pre]').value;
-      course={uid:Core.uid(),code:Core.isCourseCode(cc)?Core.normCode(cc):cc.toUpperCase(),name:b.querySelector('[data-name]').value.trim(),credits:cr,type:'REQ',
-        prereqs:pre.split(',').filter(Core.isCourseCode).map(function(x){return [Core.normCode(x)];}),coreqs:[],prereqText:pre,grade:'',placeholder:false,fixed:false};
+      add.push({uid:Core.uid(),code:Core.isCourseCode(cc)?Core.normCode(cc):cc.toUpperCase(),name:b.querySelector('[data-name]').value.trim(),credits:Core.num(b.querySelector('[data-cr]').value),type:'REQ',
+        prereqs:pre.split(',').filter(Core.isCourseCode).map(function(x){return [Core.normCode(x)];}),coreqs:[],prereqText:pre,grade:'',placeholder:false,fixed:false,pinned:true});
     }
-    var t=+b.querySelector('[data-term]').value;
-    var w=Core.validatePlacement(S.plan, course, t, baseDone(), prEff());
-    course.pinned=true;
-    function doIt(){ S.plan.terms[t].courses.push(course); commitEdit(); }
-    if(w.length){ setTimeout(function(){ confirmWarnings(w, doIt); },0); } else doIt();
+    if(!add.length){ toast('Marca al menos un curso.'); return false; }
+    var probs=issues(t, add);
+    add.forEach(function(c){ S.plan.terms[t].courses.push(c); });
+    commitEdit();
+    toast(add.length+' curso'+(add.length>1?'s':'')+' agregado'+(add.length>1?'s':'')+' a '+tS(S.plan.terms[t].label)+'.');
+    if(probs.length) setTimeout(function(){ warnPop(probs); }, 60);
   }}]});
-  var pick=m.body.querySelector('[data-pick]');
-  pick.addEventListener('change',function(){ m.body.querySelector('[data-custom]').classList.toggle('hidden',!!pick.value); });
+  function sel(){ return [].slice.call(m.body.querySelectorAll('[data-ac]:checked')).map(function(x){ return +x.getAttribute('data-ac'); }); }
+  /** Avisos (no bloquean): prerrequisitos que no se cumplen antes de ese trimestre, correquisitos y créditos. */
+  function issues(t, list){
+    var done=baseDone(); for(var q=0;q<t;q++) S.plan.terms[q].courses.forEach(function(x){ done.add(x.code); });
+    var inT=new Set(S.plan.terms[t].courses.map(function(x){return x.code;}).concat(list.map(function(x){return x.code;})));
+    var out=[];
+    list.forEach(function(c){
+      var miss=Core.missingPrereqs(c, done);
+      if(miss.length) out.push(c.code+': le falta el prerrequisito '+miss.join(', ')+'.');
+      (c.coreqs||[]).forEach(function(ors){ if(!ors.some(function(x){ return done.has(x)||inT.has(x); })) out.push(c.code+': va junto con '+ors.join(' o ')+' (correquisito).'); });
+      if(c.offer && c.offer.indexOf(S.plan.terms[t].season)<0) out.push(c.code+': solo se ofrece en '+c.offer.join(', ')+'.');
+    });
+    Core.limitedSubjects(prEff()).forEach(function(sj){
+      var n=S.plan.terms[t].courses.concat(list).filter(function(x){ return x.code.split(' ')[0]===sj; }).length;
+      if(n>1 && list.some(function(x){ return x.code.split(' ')[0]===sj; })) out.push(tS(S.plan.terms[t].label)+' tendría '+n+' cursos de '+sj+'. La regla es uno por trimestre.');
+    });
+    var tot=Core.termCredits(S.plan.terms[t])+list.reduce(function(s,c){return s+Core.num(c.credits);},0), lim=Core.termCap(S.plan.terms[t], prEff());
+    if(tot>lim) out.push(tS(S.plan.terms[t].label)+' quedaría con '+fmtCr(tot)+' créditos (máximo '+fmtCr(lim)+').');
+    return out;
+  }
+  function refresh(){
+    var t=+m.body.querySelector('[data-term]').value;
+    var done=baseDone(); for(var q=0;q<t;q++) S.plan.terms[q].courses.forEach(function(x){ done.add(x.code); });
+    avail.forEach(function(c,i){
+      var el=m.body.querySelector('[data-st="'+i+'"]'); if(!el) return;
+      var miss=Core.missingPrereqs(c, done);
+      el.textContent=miss.length?'Falta prerrequisito: '+miss.join(', '):'';
+      el.className='ac-st'+(miss.length?' bad':'');
+    });
+    var p=sel(), cr=p.reduce(function(s,i){ return s+Core.num(avail[i].credits); },0), base=Core.termCredits(S.plan.terms[t]), lim=Core.termCap(S.plan.terms[t], prEff());
+    m.body.querySelector('[data-sum]').innerHTML=p.length?'<strong>'+p.length+' seleccionado'+(p.length>1?'s':'')+'</strong> · '+fmtCr(cr)+' créditos · el trimestre quedaría con <strong'+(base+cr>lim?' style="color:var(--danger)"':'')+'>'+fmtCr(base+cr)+'</strong> de '+fmtCr(lim):'Marca los cursos que quieres poner en este trimestre.';
+  }
+  m.body.addEventListener('change',function(e){
+    if(e.target.matches('[data-ac]')){
+      refresh();
+      if(e.target.checked){ var i=+e.target.getAttribute('data-ac'), t=+m.body.querySelector('[data-term]').value, pr=issues(t,[avail[i]]).filter(function(x){ return x.indexOf(avail[i].code+':')===0; }); if(pr.length) warnPop(pr); }
+    } else if(e.target.matches('[data-term]')) refresh();
+  });
+  m.body.querySelector('[data-find]').addEventListener('input',function(e){
+    var v=e.target.value.toLowerCase().trim();
+    m.body.querySelectorAll('.ac-row').forEach(function(r){ r.classList.toggle('hidden', !!v && r.getAttribute('data-q').indexOf(v)<0); });
+    m.body.querySelectorAll('.ac-sec').forEach(function(s){ s.classList.toggle('hidden', !!v); });
+  });
+  refresh();
 }
 
 /* ---------------- Importar Degree Audit (Excel) ---------------- */
