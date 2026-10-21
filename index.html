@@ -220,6 +220,10 @@ pre.raw{white-space:pre-wrap;font-size:12px;background:var(--soft);padding:12px;
 /* Tipos de electiva */
 .tag.k-libre{background:color-mix(in srgb,var(--ip) 16%,transparent);color:var(--ip)}
 .tag.k-tec{background:color-mix(in srgb,#7a4fb5 16%,transparent);color:#7a4fb5}
+.pin-dot{color:var(--accent);opacity:.75;font-size:15px;margin-left:4px;font-weight:700}
+.pinbtn{border:none;background:none;cursor:pointer;color:var(--muted);padding:0 3px;margin-left:2px;font-size:13px;line-height:1;opacity:.7}
+.pinbtn.on{color:var(--accent);opacity:.85}
+.pinbtn:hover{opacity:1}
 .tag.k-fijo{background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent)}
 .tag.k-sohu{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)}
 table.sh .tag{font-size:9.5px;padding:0 5px;margin-left:2px}
@@ -1875,13 +1879,13 @@ function openRestore(){
     (canPlan?'<label><input type="radio" name="rst" value="plan" checked><span><strong>Deshacer los cambios manuales</strong><br><span class="small muted">Vuelve al plan como lo generó la app, sin lo que moviste, agregaste o eliminaste.</span></span></label>':'')+
     (canLoad?'<label><input type="radio" name="rst" value="load"'+(canPlan?'':' checked')+'><span><strong>Volver a la carga anterior</strong><br><span class="small muted">De '+esc(loadDesc(S.plannerRules))+' a '+esc(loadDesc(S.prevLoad))+', y regenerar el plan.</span></span></label>':'')+
     (canProg?'<label><input type="radio" name="rst" value="prog"'+(canPlan||canLoad?'':' checked')+'><span><strong>Volver al programa anterior</strong><br><span class="small muted">De '+esc(programName(S.program))+' a '+esc(programName(S.prevProgram.program))+', con el plan que tenía.</span></span></label>':'')+
-    (canFill?'<label><input type="radio" name="rst" value="fill"'+(canPlan||canLoad||canProg?'':' checked')+'><span><strong>Volver a lo que planifiqué a mano</strong><br><span class="small muted">Quita lo que completó el sistema y deja solo los trimestres que armaste.</span></span></label>':'')+
+    (canFill?'<label><input type="radio" name="rst" value="fill"'+(canPlan||canLoad||canProg?'':' checked')+'><span><strong>Volver al plan anterior</strong><br><span class="small muted">Deshace lo último que hizo el sistema al completar o reorganizar.</span></span></label>':'')+
     '</div>';
   modal({title:'Restaurar', narrow:true, body:body, buttons:[{label:'Cancelar'},{label:'Restaurar',primary:true,onClick:function(b){
     var v=(b.querySelector('input[name=rst]:checked')||{}).value;
     if(v==='plan'){ S.plan=clone(S.planOriginal); S.planEdited=false; S.historyChanged=false; save(); renderAll(); toast('Plan original restaurado.'); }
     else if(v==='prog') undoProgram();
-    else if(v==='fill'){ S.plan=S.planBeforeFill; S.planBeforeFill=null; S.planOriginal=null; S.planEdited=true; session.editMode=true; save(); renderAll(); toast('Volviste a lo que planificaste a mano.'); }
+    else if(v==='fill'){ S.plan=S.planBeforeFill; S.planBeforeFill=null; S.planOriginal=null; S.planEdited=true; session.editMode=true; save(); renderAll(); toast('Volviste al plan anterior.'); }
     else if(v==='load'){ var prev=S.prevLoad; rememberLoad(); LOAD_KEYS.forEach(function(k){ S.plannerRules[k]=prev[k]; }); save(); session.editMode=false; regenerate(true); toast('Carga restaurada: '+loadDesc(S.plannerRules)+'.'); }
   }}]});
 }
@@ -2296,7 +2300,7 @@ function openHelp(){
       'Las <strong>alertas</strong> avisan de probatoria, cursos sin ubicar o reglas que no se cumplen. Tócalas para ver el detalle.' ])+
     sec('3. Cambiar el plan',[ 'Toca <strong>Editar plan</strong>. En cada curso, <strong>Editar</strong> sirve para moverlo de trimestre o quitarlo.',
       'Con <strong>+ Agregar curso</strong> marcas varias clases a la vez para un trimestre; si alguna no cumple un prerrequisito sale un aviso, pero se agrega igual. Con <strong>+ Agregar trimestre</strong> añades más trimestres.',
-      'Los cursos que escoges o mueves a mano quedan marcados como <span class="tag k-fijo">fijo</span>. Al generar el plan otra vez puedes <strong>mantenerlos</strong> en su trimestre o empezar de cero.',
+      'Los cursos que escoges o mueves a mano quedan <strong>fijos</strong> y llevan un puntito <span class="pin-dot">•</span> junto al código. En <strong>Editar plan</strong> tocas ○/● para fijar o soltar un curso. <strong>Reorganizar</strong> deja los fijos en su trimestre y vuelve a acomodar los demás.',
       '<strong>Completar el resto</strong> deja lo que pusiste y el sistema planifica lo que falta.',
       'Si algo no te gusta, <strong>Restaurar</strong> lo deshace.' ])+
     sec('4. Más opciones',[ '<strong>Terminar antes</strong>: compara cuánto se acorta el plan con más créditos o con Summer.',
@@ -2324,11 +2328,12 @@ function renderPlan(){
   if(canUndoProgram() && !S.prevProgram.hidden) html+='<div class="notice info"><span>Cambiaste de <strong>'+esc(programName(S.prevProgram.program))+'</strong> a <strong>'+esc(programName(S.program))+'</strong>.</span><button class="btn sm" data-action="undo-program">Deshacer cambio de programa</button><button class="btn link" data-action="hide-prevprog">Ocultar</button></div>';
   if(edit){
     html+='<div class="editbar"><strong>Editando el plan</strong><span class="small muted hint">Toca Editar en un curso para moverlo, cambiarlo o eliminarlo.</span><span class="spacer"></span>'+
-      '<button class="btn sm" data-action="complete-plan">Completar el resto</button><button class="btn sm" data-action="restore">Restaurar</button><button class="btn sm primary" data-action="toggle-edit">Listo</button></div>';
+      '<button class="btn sm" data-action="complete-plan">Completar el resto</button>'+(collectPins().n?'<button class="btn sm" data-action="reorg">Reorganizar</button>':'')+'<button class="btn sm" data-action="restore">Restaurar</button><button class="btn sm primary" data-action="toggle-edit">Listo</button></div>';
   } else {
     var credOpts=[3,4,6,7,9,10,12,13,14,15,16,18], clsOpts=[0,1,2,3,4,5,6,7];
     html+='<div class="toolbar">'+
       (S.plan.blank?'<button class="btn primary" data-action="complete-plan">Completar el resto</button><button class="btn" data-action="toggle-edit">Seguir editando</button>':'<button class="btn primary" data-action="toggle-edit">Editar plan</button>')+
+      (!S.plan.blank && collectPins().n?'<button class="btn" data-action="reorg" title="Deja los cursos fijos en su trimestre y vuelve a acomodar los demás">Reorganizar</button>':'')+
       '<div class="menu"><button class="btn" data-action="menu" aria-haspopup="true" aria-expanded="false">Descargar PDF ▾</button><div class="menu-list" role="menu">'+
         '<button role="menuitem" data-action="pdf-plan">Plan académico</button>'+
         '<button role="menuitem" data-action="pdf-audit">Hoja del currículo</button>'+
@@ -2358,7 +2363,8 @@ function renderPlan(){
   if(S.plan.unscheduled.length) html+='<div class="notice bad"><strong>Cursos que no se pudieron ubicar</strong><ul>'+
     S.plan.unscheduled.map(function(u){return '<li>'+esc(u.code)+' '+esc(u.name)+': '+esc(u.reason)+'</li>';}).join('')+'</ul></div>';
   var sgMap=slotGroupMap(cur), stP=Core.buildStatus(cur,S.records,S.plannerRules);
-  html+='<div class="pq-legend small muted">Prerrequisitos: <span class="pq pq-done">completado</span> <span class="pq pq-ip">en progreso</span> <span class="pq pq-pend">pendiente</span></div>';
+  var nPins=collectPins().n;
+  html+='<div class="pq-legend small muted">Prerrequisitos: <span class="pq pq-done">completado</span> <span class="pq pq-ip">en progreso</span> <span class="pq pq-pend">pendiente</span>'+(nPins||edit?'<span style="margin-left:14px"><span class="pin-dot" style="margin:0 3px 0 0">•</span>curso fijo'+(edit?' (toca ○ para fijar)':'')+'</span>':'')+'</div>';
   html+='<div class="'+(edit?'editing':'')+'">';
   var win=planWindow(edit);
   S.plan.terms.forEach(function(t,ti){
@@ -2372,8 +2378,8 @@ function renderPlan(){
         '<thead><tr><th>Curso</th><th>Descripción</th><th class="cr">Créditos</th><th>Estado/Nota</th><th>Prerrequisito</th>'+(edit?'<th></th>':'')+'</tr></thead><tbody>';
       t.courses.forEach(function(c){
         var eg=planElecGroup(c,cur,sgMap);
-        var tags=(c.pinned?'<span class="tag k-fijo" title="Lo escogiste o moviste a mano. Al generar el plan se queda en este trimestre.">fijo</span>':'')+(eg?elecTag(eg):'')+(c.placeholder?'<span class="tag">por seleccionar</span>':'')+(c.type==='PREP'?'<span class="tag">preparatorio</span>':'')+(c.type==='CAP'?'<span class="tag">proyecto</span>':'')+(c.offer?'<span class="tag">solo '+esc(c.offer.join('/'))+'</span>':'');
-        html+='<tr data-uid="'+c.uid+'"><td class="code">'+esc(c.code)+'</td><td class="desc">'+esc(c.name||'')+tags+'</td>'+
+        var tags=(eg?elecTag(eg):'')+(c.placeholder?'<span class="tag">por seleccionar</span>':'')+(c.type==='PREP'?'<span class="tag">preparatorio</span>':'')+(c.type==='CAP'?'<span class="tag">proyecto</span>':'')+(c.offer?'<span class="tag">solo '+esc(c.offer.join('/'))+'</span>':'');
+        html+='<tr data-uid="'+c.uid+'"><td class="code">'+esc(c.code)+(c.fixed?'':(edit?'<button class="pinbtn'+(c.pinned?' on':'')+'" data-action="toggle-pin" title="'+(c.pinned?'Fijo: se queda en este trimestre al reorganizar. Toca para soltarlo.':'Toca para dejarlo fijo en este trimestre.')+'" aria-label="'+(c.pinned?'Soltar':'Fijar')+' '+esc(c.code)+'">'+(c.pinned?'●':'○')+'</button>':(c.pinned?'<span class="pin-dot" title="Fijo: se queda en este trimestre al reorganizar." aria-label="fijo">•</span>':'')))+'</td><td class="desc">'+esc(c.name||'')+tags+'</td>'+
           '<td class="cr">'+fmtCr(c.credits)+'</td><td class="st '+gradeClass(c.grade)+'">'+esc(c.grade||'')+'</td>'+
           '<td class="pre">'+prereqHTML(c,stP)+'</td>'+
           (edit?'<td class="act"><button class="btn sm" data-action="edit-course">Editar</button></td>':'')+'</tr>';
@@ -2595,7 +2601,7 @@ function completePlan(){
 function regenWithConfirm(){
   var pk=collectPins();
   if(pk.n){
-    modal({title:'Generar el plan', narrow:true, body:'<p style="margin-top:0">Tienes <strong>'+pk.n+' curso'+(pk.n>1?'s':'')+' fijo'+(pk.n>1?'s':'')+'</strong> que escogiste o moviste a mano (marcados con <span class="tag k-fijo">fijo</span>). ¿Qué quieres hacer?</p>',
+    modal({title:'Generar el plan', narrow:true, body:'<p style="margin-top:0">Tienes <strong>'+pk.n+' curso'+(pk.n>1?'s':'')+' fijo'+(pk.n>1?'s':'')+'</strong> que escogiste o moviste a mano (marcados con un punto <span class="pin-dot">•</span>). ¿Qué quieres hacer?</p>',
       buttons:[{label:'Cancelar'},{label:'Empezar de cero', onClick:function(){ regenerate(false,{fresh:true}); }},{label:'Mantener mis cursos',primary:true,onClick:function(){ regenerate(); }}]});
     return;
   }
@@ -3855,6 +3861,8 @@ document.addEventListener('click',function(e){
   else if(a==='regen') regenWithConfirm();
   else if(a==='blank-plan') startBlankPlan();
   else if(a==='complete-plan') completePlan();
+  else if(a==='reorg'){ var np=collectPins().n, prevPlan=clone(S.plan); session.editMode=false; regenerate(true); S.planBeforeFill=prevPlan; save(); renderAll(); toast('Plan reorganizado: '+np+' curso'+(np>1?'s':'')+' fijo'+(np>1?'s':'')+' en su lugar y el resto acomodado de nuevo.'); }
+  else if(a==='toggle-pin'){ var fu=findCourse(btn.closest('tr').getAttribute('data-uid')); if(fu){ fu.c.pinned=!fu.c.pinned; commitEdit(); } }
   else if(a==='toggle-edit'){ session.editMode=!session.editMode; renderPlan(); }
   else if(a==='restore') openRestore();
   else if(a==='plan-all'){ S.planTerms=0; save(); renderAll(); }
