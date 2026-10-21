@@ -1570,12 +1570,44 @@ function modal(opts){
   var f=ov.querySelector('input,select,textarea,.btn.primary'); if(f) f.focus();
   return { body:body, close:close, el:ov };
 }
-function confirmWarnings(warnings, onContinue, onCancel){
+function confirmWarnings(warnings, onContinue, onCancel, extras){
+  extras=extras||[];
   modal({ title:'Revisa este cambio',
-    body:'<ul>'+warnings.map(function(w){return '<li>'+esc(w)+'</li>';}).join('')+'</ul><p class="muted small">Puedes cancelar o continuar de todos modos.</p>',
+    body:'<ul>'+warnings.map(function(w){return '<li>'+esc(w)+'</li>';}).join('')+'</ul>'+
+      (extras.length?'<div class="checklist" style="margin:4px 0 8px">'+extras.map(function(x,i){ return '<label><input type="checkbox" data-xi="'+i+'" checked><span><strong>Incluir también '+esc(x.code)+'</strong>'+(x.name?' '+esc(x.name):'')+'<br><span class="small muted">'+esc(x.why)+'</span></span></label>'; }).join('')+'</div>':'')+
+      '<p class="muted small">Tú decides: puedes cancelar o continuar'+(extras.length?' con o sin las clases marcadas':' de todos modos')+'.</p>',
     buttons:[{label:'Cancelar', onClick:function(){ if(onCancel) onCancel(); }},
-             {label:'Continuar de todos modos', primary:true, onClick:function(){ onContinue(); }}],
+             {label:extras.length?'Continuar':'Continuar de todos modos', primary:true, onClick:function(b){
+               var pick=[].slice.call(b.querySelectorAll('[data-xi]:checked')).map(function(x){ return extras[+x.getAttribute('data-xi')]; });
+               onContinue(pick); }}],
     onClose:function(){} });
+}
+/** Correquisitos de un curso que no quedarían en ese trimestre ni antes, y que se pueden incluir. */
+function coreqSuggestions(course, ti, extraCodes){
+  var cur=curr(); if(!cur || !course.coreqs || !course.coreqs.length) return [];
+  var st=Core.buildStatus(cur,S.records,S.plannerRules), done=baseDone();
+  for(var q=0;q<ti;q++) S.plan.terms[q].courses.forEach(function(x){ done.add(x.code); });
+  var inT=new Set((S.plan.terms[ti]?S.plan.terms[ti].courses:[]).map(function(x){return x.code;}).concat(extraCodes||[]));
+  var out=[];
+  course.coreqs.forEach(function(ors){
+    if(ors.some(function(c){ return done.has(c) || inT.has(c); })) return;
+    var code=ors.filter(function(c){ return cur.courses.some(function(o){ return o.code===c; }) && !st.approved[c]; })[0];
+    if(!code) return;
+    var o=cur.courses.filter(function(x){ return x.code===code; })[0], where=findCourseByCode(code);
+    out.push({code:code, name:o.name||'', why:course.code+' lo pide como correquisito (mismo trimestre o antes).'+(where?' Ahora está en '+tS(S.plan.terms[where.ti].label)+'; se moverá aquí.':'')});
+  });
+  return out;
+}
+function findCourseByCode(code){
+  for(var i=0;i<S.plan.terms.length;i++){ var cs=S.plan.terms[i].courses; for(var j=0;j<cs.length;j++) if(cs[j].code===code) return {ti:i,ci:j,c:cs[j]}; }
+  return null;
+}
+/** Pone un curso del currículo en el trimestre ti (si ya estaba en el plan, lo mueve). */
+function includeCourse(code, ti){
+  var w=findCourseByCode(code);
+  if(w){ if(w.ti===ti) return; S.plan.terms[w.ti].courses.splice(w.ci,1); if(!w.c.fixed) w.c.pinned=true; S.plan.terms[ti].courses.push(w.c); return; }
+  var c=curr().courses.filter(function(x){ return x.code===code; })[0]; if(!c) return;
+  S.plan.terms[ti].courses.push({uid:Core.uid(),code:c.code,name:c.name,credits:c.credits,type:c.type,prereqs:c.prereqs,coreqs:c.coreqs,prereqText:c.prereqText,grade:'',placeholder:false,group:c.group,offer:c.offer||null,fixed:false,pinned:true});
 }
 
 function showError(title, err){
@@ -3181,24 +3213,29 @@ function moveCourse(uid, target, selectEl){
   if(target==='new'){ var last=probe.terms[probe.terms.length-1]; var nt=Core.Terms.next(last,S.plannerRules.includeSummer); probe.terms.push({season:nt.season,year:nt.year,label:Core.Terms.label(nt),courses:[]}); }
   probe.terms[f.ti].courses.splice(f.ci,1);
   var w=Core.validatePlacement(probe, f.c, idx, baseDone(), prEff());
-  function doIt(){
+  var extras = target==='new' ? [] : coreqSuggestions(f.c, idx);
+  function doIt(pick){
     if(target==='new') idx=addNewTerm();
     S.plan.terms[f.ti].courses.splice(f.ci,1);
     if(!f.c.fixed) f.c.pinned=true;
     S.plan.terms[idx].courses.push(f.c);
+    (pick||[]).forEach(function(x){ includeCourse(x.code, idx); });
     commitEdit();
+    if(pick && pick.length) toast('También se incluyó '+pick.map(function(x){return x.code;}).join(', ')+' en '+tS(S.plan.terms[idx].label)+'.');
   }
-  if(w.length) confirmWarnings(w, doIt, function(){ if(selectEl) selectEl.value=String(f.ti); });
+  if(w.length) confirmWarnings(w, doIt, function(){ if(selectEl) selectEl.value=String(f.ti); }, extras);
   else doIt();
 }
 /** Aviso breve que desaparece solo (no bloquea). */
-function warnPop(lines){
+function warnPop(lines, actions){
+  actions=actions||[];
   var old=document.querySelector('.warnpop'); if(old) old.remove();
   var w=document.createElement('div'); w.className='warnpop'; w.setAttribute('role','status');
-  w.innerHTML='<strong>Aviso</strong>'+lines.map(function(l){ return '<div>'+esc(l)+'</div>'; }).join('');
+  w.innerHTML='<strong>Aviso</strong>'+lines.map(function(l){ return '<div>'+esc(l)+'</div>'; }).join('')+
+    (actions.length?'<div class="row" style="margin-top:8px;gap:6px">'+actions.map(function(a,i){ return '<button class="btn sm" data-wa="'+i+'">'+esc(a.label)+'</button>'; }).join('')+'<button class="btn sm ghost" data-wa="x">No, gracias</button></div>':'');
   document.body.appendChild(w);
-  clearTimeout(warnPop._t); warnPop._t=setTimeout(function(){ w.remove(); }, 5500);
-  w.addEventListener('click',function(){ w.remove(); });
+  clearTimeout(warnPop._t); warnPop._t=setTimeout(function(){ w.remove(); }, actions.length?12000:5500);
+  w.addEventListener('click',function(e){ var b=e.target.closest('[data-wa]'); if(b && b.getAttribute('data-wa')!=='x') actions[+b.getAttribute('data-wa')].fn(); w.remove(); });
 }
 function openAddCourse(ti){
   var cur=curr(); var st=Core.buildStatus(cur,S.records,S.plannerRules);
@@ -3230,8 +3267,10 @@ function openAddCourse(ti){
         prereqs:pre.split(',').filter(Core.isCourseCode).map(function(x){return [Core.normCode(x)];}),coreqs:[],prereqText:pre,grade:'',placeholder:false,fixed:false,pinned:true});
     }
     if(!add.length){ toast('Marca al menos un curso.'); return false; }
-    var probs=issues(t, add);
+    var probs=issues(t, add.concat((m.extraInc||[]).map(function(c){ return {code:c,credits:0,prereqs:[],coreqs:[]}; })));
     add.forEach(function(c){ S.plan.terms[t].courses.push(c); });
+    (m.extraInc||[]).forEach(function(c){ includeCourse(c, t); });
+    probs=probs.filter(function(x){ return !(m.extraInc||[]).some(function(c){ return x.indexOf(c)>=0 && /correquisito/.test(x); }); });
     commitEdit();
     toast(add.length+' curso'+(add.length>1?'s':'')+' agregado'+(add.length>1?'s':'')+' a '+tS(S.plan.terms[t].label)+'.');
     if(probs.length) setTimeout(function(){ warnPop(probs); }, 60);
@@ -3271,7 +3310,19 @@ function openAddCourse(ti){
   m.body.addEventListener('change',function(e){
     if(e.target.matches('[data-ac]')){
       refresh();
-      if(e.target.checked){ var i=+e.target.getAttribute('data-ac'), t=+m.body.querySelector('[data-term]').value, pr=issues(t,[avail[i]]).filter(function(x){ return x.indexOf(avail[i].code+':')===0; }); if(pr.length) warnPop(pr); }
+      if(e.target.checked){
+        var i=+e.target.getAttribute('data-ac'), t=+m.body.querySelector('[data-term]').value;
+        var chosen=sel().map(function(k){ return avail[k].code; });
+        var pr=issues(t, sel().map(function(k){ return avail[k]; })).filter(function(x){ return x.indexOf(avail[i].code+':')===0; });
+        var acts=coreqSuggestions(avail[i], t, chosen).map(function(x){
+          var k=avail.findIndex(function(a){ return a.code===x.code; });
+          return {label:'Incluir '+x.code, fn:function(){
+            if(k>=0){ var cb=m.body.querySelector('[data-ac="'+k+'"]'); if(cb){ cb.checked=true; refresh(); } }
+            else { (m.extraInc=m.extraInc||[]).push(x.code); toast(x.code+' se moverá a este trimestre al agregar.'); }
+          }};
+        });
+        if(pr.length) warnPop(pr, acts);
+      }
     } else if(e.target.matches('[data-term]')) refresh();
   });
   m.body.querySelector('[data-find]').addEventListener('input',function(e){
