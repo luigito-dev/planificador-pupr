@@ -14,29 +14,33 @@
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 :root{
-  --paper:#ffffff; --soft:#f5f7f9; --ink:#1c2a39; --muted:#5d6a77; --line:#e3e8ec;
-  --accent:#7b1e2b; --accent-ink:#ffffff; --accent-soft:#f7eced; --ok:#2f6b4f; --ip:#2c5d8a; --warn:#9a5b00; --danger:#a3262f;
-  --bar-pend:#e6eaee;
+  /* Paleta oficial PUPR: Poli Azul #0053a5, Poli Amarillo #ffd334, Poli Naranja #f8951d, Poli Gris #ceced1 */
+  --azul:#0053a5; --amarillo:#ffd334; --naranja:#f8951d; --gris:#ceced1;
+  --bg:#f4f5f8; --paper:#ffffff; --soft:#eef1f6; --ink:#1d2733; --muted:#5f6b78; --line:#e2e5ea;
+  --accent:#0053a5; --accent-ink:#ffffff; --accent-soft:#e7f0fa; --ok:#2f7a4f; --ip:#7a4fb5; --warn:#b35f00; --pend:#f8951d; --danger:#a3262f;
+  --bar-pend:#ceced1;
   box-sizing:border-box;
   padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --paper:#151b22; --soft:#1c242d; --ink:#e6ebf0; --muted:#9aa6b2; --line:#2c3743;
-    --accent:#e0939c; --accent-ink:#151b22; --accent-soft:#2a1f24; --ok:#7fc3a0; --ip:#8db8e0; --warn:#e2b25c; --danger:#ef8a91; --bar-pend:#2c3743;
+    --bg:#10151b; --paper:#161d25; --soft:#1d2630; --ink:#e6ebf0; --muted:#9aa6b2; --line:#2c3743;
+    --accent:#7fb2ff; --accent-ink:#10151b; --accent-soft:#1b2a3d; --ok:#7fc3a0; --ip:#b9a0e6; --warn:#f2b45f; --pend:#f8a64a; --danger:#ef8a91; --bar-pend:#2c3743;
   }
 }
 :root[data-theme="dark"]{
-  --paper:#151b22; --soft:#1c242d; --ink:#e6ebf0; --muted:#9aa6b2; --line:#2c3743;
-  --accent:#e0939c; --accent-ink:#151b22; --accent-soft:#2a1f24; --ok:#7fc3a0; --ip:#8db8e0; --warn:#e2b25c; --danger:#ef8a91; --bar-pend:#2c3743;
+  --bg:#10151b; --paper:#161d25; --soft:#1d2630; --ink:#e6ebf0; --muted:#9aa6b2; --line:#2c3743;
+  --accent:#7fb2ff; --accent-ink:#10151b; --accent-soft:#1b2a3d; --ok:#7fc3a0; --ip:#b9a0e6; --warn:#f2b45f; --pend:#f8a64a; --danger:#ef8a91; --bar-pend:#2c3743;
 }
 *,*::before,*::after{box-sizing:inherit}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
-body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.55 "Public Sans",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;font-variant-numeric:tabular-nums}
-.wrap{max-width:980px;margin:0 auto;padding:0 20px 72px}
-header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 0}
-.brand{font-weight:600;font-size:14px;color:var(--muted)}
-.brand b{color:var(--ink);font-weight:600}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "Public Sans",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;font-variant-numeric:tabular-nums}
+.wrap{max-width:1080px;margin:0 auto;padding:0 20px 72px}
+header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;background:var(--azul);box-shadow:0 0 0 100vmax var(--azul);clip-path:inset(0 -100vmax);margin-bottom:18px;color:#fff}
+header.top .btn.ghost{color:#fff}
+header.top .btn.ghost:hover{background:rgba(255,255,255,.14)}
+.brand{font-weight:700;font-size:16px;color:var(--amarillo)}
+.brand b{color:#fff;font-weight:700}
 .btn{font:inherit;font-size:15px;border:1px solid var(--line);background:var(--paper);color:var(--ink);padding:9px 16px;border-radius:8px;cursor:pointer;white-space:nowrap;line-height:1.2}
 .btn:hover{background:var(--soft)}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
@@ -76,7 +80,7 @@ textarea{width:100%;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:
 /* Pestañas */
 .tabs{display:flex;gap:24px;border-bottom:1px solid var(--line);margin-bottom:20px}
 .tabs [role=tab]{font:inherit;font-size:15px;font-weight:500;background:none;border:none;border-bottom:2px solid transparent;padding:10px 0;margin-bottom:-1px;color:var(--muted);cursor:pointer}
-.tabs [role=tab][aria-selected=true]{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+.tabs [role=tab][aria-selected=true]{color:var(--accent);border-bottom:3px solid var(--amarillo);font-weight:700}
 .tabs .count{font-size:12px;color:var(--muted);font-weight:400;margin-left:4px}
 .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:18px}
 
@@ -214,15 +218,15 @@ pre.raw{white-space:pre-wrap;font-size:12px;background:var(--soft);padding:12px;
 .probadge.warn{background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn)}
 /* Prerrequisitos a color */
 .pq{font-weight:600}
-.pq-done{color:#14532d} .pq-ip{color:#1e3a8a} .pq-pend{color:#9a3412}
+.pq-done{color:#1f6b42} .pq-ip{color:#6a3fa8} .pq-pend{color:#b35f00}
 .pq-legend{margin:0 0 12px}
 .pq-legend .pq{margin-left:6px}
 /* Tipos de electiva */
 .tag.k-libre{background:color-mix(in srgb,var(--ip) 16%,transparent);color:var(--ip)}
-.tag.k-tec{background:color-mix(in srgb,#7a4fb5 16%,transparent);color:#7a4fb5}
-.pin-dot{color:var(--accent);opacity:.75;font-size:15px;margin-left:4px;font-weight:700}
+.tag.k-tec{background:color-mix(in srgb,#5f6b78 14%,transparent);color:#44505c}
+.pin-dot{color:#e0b000;opacity:1;font-size:15px;margin-left:4px;font-weight:700}
 .pinbtn{border:none;background:none;cursor:pointer;color:var(--muted);padding:0 3px;margin-left:2px;font-size:13px;line-height:1;opacity:.7}
-.pinbtn.on{color:var(--accent);opacity:.85}
+.pinbtn.on{color:#e0b000;opacity:1}
 .pinbtn:hover{opacity:1}
 .tag.k-fijo{background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent)}
 .tag.k-sohu{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)}
@@ -319,7 +323,7 @@ details[open]>summary .chg{display:none}
 details.alerts.soft{border-left-color:var(--warn)}
 details.alerts>summary{list-style:none}
 details.alerts>summary::-webkit-details-marker{display:none}
-header.top .help{border-color:var(--line)}
+header.top .help{border-color:rgba(255,255,255,.55)}
 @media (max-width:680px){
   .lg-only{display:none}
   .wstep{padding:12px;gap:10px}
@@ -340,6 +344,62 @@ header.top .help{border-color:var(--line)}
 .warnpop{position:fixed;right:16px;top:16px;z-index:70;max-width:360px;background:#fff8e6;color:#5c3d00;border:1px solid #f0c36d;border-left:4px solid var(--warn);border-radius:10px;padding:10px 14px;font-size:14px;box-shadow:0 10px 30px rgba(0,0,0,.15);cursor:pointer}
 .warnpop strong{display:block;margin-bottom:2px}
 @media (max-width:680px){ .warnpop{left:12px;right:12px;max-width:none} }
+
+/* Diseño nuevo: tarjetas y bloques por año */
+.card{background:var(--paper);border:1px solid var(--line);border-radius:14px}
+.student.card{padding:16px 20px 14px;margin-bottom:6px}
+.stu-top{display:flex;flex-wrap:wrap;gap:10px 28px;align-items:flex-start}
+.stu-who{min-width:240px;flex:1}
+.student .name{font-size:26px}
+.student .facts{margin:0;display:flex;gap:26px;grid-template-columns:none}
+.student .facts dt{font-size:12.5px}
+.student .facts dd{font-size:20px}
+.student .meta{margin-top:6px}
+.student .meta select{max-width:100%}
+.student .meta>span{max-width:100%}
+.student .progress{margin-top:12px}
+.student .progress .bar{height:5px}
+.tabs{margin-top:16px}
+.years{display:flex;flex-direction:column;gap:20px}
+.yh{display:flex;align-items:baseline;gap:10px;margin:0 2px 8px}
+.yh h3{margin:0;font-size:17px;color:var(--accent)}
+.ycr{margin-left:auto;color:var(--muted);font-size:14px}
+.ygrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.ygrid.four{grid-template-columns:repeat(4,minmax(0,1fr))}
+.term.card{padding:12px;margin:0}
+.term.card .term-head{padding-bottom:8px;flex-wrap:wrap}
+.term.card .term-head h4{margin:0;font-size:15.5px}
+.term.card .tcr{font-size:13.5px}
+.crow{border:1px solid var(--line);border-radius:10px;padding:7px 9px;margin-bottom:6px;background:var(--paper)}
+.crow.ip{border-left:3px solid var(--ip)}
+.editing .crow{border-style:dashed}
+.cl1{display:flex;align-items:center;gap:6px;min-width:0}
+.cl1 .code{font-weight:700;font-size:14px;white-space:nowrap}
+.cl1 .nm{flex:1;min-width:0;font-size:13.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ccr{font-size:13px;color:var(--muted);white-space:nowrap}
+.cg{font-size:12.5px;font-weight:700}
+.cl2{font-size:12px;margin-top:3px;display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center}
+.cl2 .tag{margin-left:0}
+.cl2 .pre{color:var(--muted)}
+.edbtn{padding:3px 8px;font-size:12.5px}
+.ldot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;vertical-align:1px}
+.pq-legend{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+details.review{padding:0;margin:0 0 14px;border-left:4px solid var(--naranja)}
+details.review.bad{border-left-color:var(--danger)}
+details.review>summary{cursor:pointer;list-style:none;padding:11px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+details.review>summary::-webkit-details-marker{display:none}
+details.review .chips{display:flex;gap:6px;flex-wrap:wrap}
+details.review .chg{margin-left:auto}
+.chip{font-size:13px;padding:2px 10px;border-radius:20px;background:#fff1de;color:#8a4a00}
+.chip.b{background:var(--accent-soft);color:var(--accent)}
+.chip.bad{background:#fbe5e6;color:var(--danger)}
+.rbody{padding:0 16px 14px}
+.rbody h5{margin:12px 0 4px;font-size:14px}
+.rbody ul{margin:0;padding-left:20px;font-size:14px}
+details.loadbox{background:var(--paper);border:1px solid var(--line)}
+.toolbar{margin-bottom:12px}
+.empty,.wizard{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:18px 20px}
+@media (max-width:760px){ .ygrid,.ygrid.four{grid-template-columns:minmax(0,1fr)} .term.card{min-width:0} .student .facts{width:100%;justify-content:space-between;gap:12px} .student .facts dd{font-size:17px} }
 @media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -354,7 +414,7 @@ header.top .help{border-color:var(--line)}
       <button class="btn ghost help" data-action="help" aria-label="Ayuda">Ayuda</button>
     </div>
   </header>
-  <section class="student" id="student"></section>
+  <section class="student card" id="student"></section>
   <nav class="tabs" role="tablist" id="tabs" aria-label="Secciones"></nav>
   <main id="panel" role="tabpanel"></main>
 </div>
@@ -1815,6 +1875,28 @@ function alertsHTML(){
     al.map(function(a){ return '<li class="al-'+a.lvl+'">'+esc(a.t)+'</li>'; }).join('')+'</ul></details>';
 }
 
+/** Un solo panel con todo lo que hay que revisar: alertas, electivas por escoger, cursos que faltan y cursos sin ubicar. */
+function reviewHTML(pendingSlots){
+  var al=academicAlerts(), miss=missingCourses(), uns=(S.plan&&S.plan.unscheduled)||[];
+  var nb=al.filter(function(a){return a.lvl==='bad';}).length;
+  var chips=[], n=0;
+  if(pendingSlots){ chips.push('<span class="chip">'+pendingSlots+' electiva'+(pendingSlots>1?'s':'')+' por escoger</span>'); n++; }
+  if(miss.length){ chips.push('<span class="chip">Faltan '+miss.length+' curso'+(miss.length>1?'s':'')+'</span>'); n++; }
+  if(uns.length){ chips.push('<span class="chip bad">'+uns.length+' sin ubicar</span>'); n++; }
+  if(al.length){ chips.push('<span class="chip'+(nb?' bad':' b')+'">'+al.length+' alerta'+(al.length>1?'s':'')+'</span>'); n+=al.length; }
+  if(!chips.length) return '';
+  var body='';
+  if(al.length) body+='<h5>Alertas</h5><ul>'+al.map(function(a){ return '<li class="al-'+a.lvl+'">'+esc(a.t)+'</li>'; }).join('')+'</ul>';
+  if(pendingSlots) body+='<h5>Electivas</h5><p class="small" style="margin:0 0 6px">'+pendingSlots+' electiva'+(pendingSlots>1?'s':'')+' por escoger. <button class="btn link" data-action="open-audit">Escoger en el currículo</button></p>';
+  if(uns.length) body+='<h5>Cursos que no se pudieron ubicar</h5><ul>'+uns.map(function(u){ return '<li>'+esc(u.code)+' '+esc(u.name||'')+': '+esc(u.reason)+'</li>'; }).join('')+'</ul>';
+  if(miss.length){
+    var cr=miss.reduce(function(s,c){ return s+Core.num(c.credits); },0);
+    body+='<h5>Faltan '+miss.length+' curso'+(miss.length>1?'s':'')+' por planificar ('+fmtCr(cr)+' créditos)</h5><table class="plain"><thead><tr><th>Curso</th><th>Descripción</th><th class="num">Créditos</th><th>Prerrequisito</th></tr></thead><tbody>'+
+      miss.map(function(c){ return '<tr><td><strong>'+esc(c.code)+'</strong></td><td>'+esc(c.name||'')+(c.type==='ELEC'?' '+elecTag(c.group):'')+(c.type==='PREP'?' <span class="tag">prep.</span>':'')+'</td><td class="num">'+fmtCr(c.credits)+'</td><td class="small muted">'+esc(c.prereqText||'')+'</td></tr>'; }).join('')+
+      '</tbody></table><div class="row" style="margin-top:10px"><button class="btn sm primary" data-action="acomodar">Acomodar automáticamente</button></div>';
+  }
+  return '<details class="review card'+(nb||uns.length?' bad':'')+'" id="reviewBox"'+(session.reviewOpen?' open':'')+'><summary><strong>'+(n===1?'1 cosa':n+' cosas')+' por revisar</strong><span class="chips">'+chips.join('')+'</span><span class="chg">Ver</span></summary><div class="rbody">'+body+'</div></details>';
+}
 /** Cursos del currículo que el estudiante aún necesita y que no están en ningún trimestre del plan. */
 function missingCourses(){
   var cur=curr(); if(!cur || !S.plan) return [];
@@ -1848,7 +1930,7 @@ function missingHTML(){
   return '<details class="alerts soft" id="missBox"'+(session.missOpen?' open':'')+'><summary><strong>Faltan '+miss.length+' curso'+(miss.length>1?'s':'')+' ('+fmtCr(cr)+' créditos) por planificar</strong> <span class="chg">Ver lista</span></summary>'+
     '<table class="plain" style="margin-top:8px"><thead><tr><th>Curso</th><th>Descripción</th><th class="num">Créditos</th><th>Prerrequisito</th></tr></thead><tbody>'+
     miss.map(function(c){ return '<tr><td><strong>'+esc(c.code)+'</strong></td><td>'+esc(c.name||'')+(c.type==='ELEC'?' '+elecTag(c.group):'')+(c.type==='PREP'?' <span class="tag">preparatorio</span>':'')+'</td><td class="num">'+fmtCr(c.credits)+'</td><td class="small muted">'+esc(c.prereqText||'')+'</td></tr>'; }).join('')+
-    '</tbody></table><div class="row" style="margin-top:10px"><button class="btn sm primary" data-action="complete-plan">Completar el resto automáticamente</button></div></details>';
+    '</tbody></table><div class="row" style="margin-top:10px"><button class="btn sm primary" data-action="complete-plan">Acomodar automáticamente</button></div></details>';
 }
 /* ---------------- Trimestres a planificar ---------------- */
 /** Índices de los trimestres que se muestran (los primeros N con cursos). 0 = todos. */
@@ -2209,10 +2291,20 @@ function renderStudent(){
     ? '<span>Transcript: '+S.records.length+' cursos</span>'
     : (S.plan ? '<span>Sin historial <button class="btn link" data-action="open-transcript">Cargar archivo</button>'+(cur?' o <button class="btn link" data-action="open-audit">marcar cursos a mano</button>':'')+'</span>' : '');
   $('student').innerHTML =
+    '<div class="stu-top"><div class="stu-who">'+
     '<label class="hidden" for="stName">Nombre del estudiante</label>'+
     '<input id="stName" class="name" value="'+esc(S.student.name)+'" placeholder="Nombre del estudiante" autocomplete="off">'+
     (function(){ var ps=probationStatus(); return ps.level==='bad'?'<div class="probadge bad">En probatoria académica</div>':ps.level==='warn'?'<div class="probadge warn">Cerca de probatoria</div>':''; })()+
     '<div class="stid"><label for="stId">Número de estudiante</label><input id="stId" value="'+esc(S.student.id||'')+'" placeholder="Ej. 12345" autocomplete="off" inputmode="numeric"></div>'+
+    '</div>'+
+    '<dl class="facts">'+
+      '<div><dt><label for="gpaEdit">GPA</label></dt><dd><input id="gpaEdit" class="gpa-inline" inputmode="decimal" value="'+(a.gpa==null?'':fmt(a.gpa))+'" placeholder="—" title="Toca para editar el GPA">'+
+        (a.gpaEdited?'<small style="display:block">editado · <button class="btn link small" style="padding:0" data-action="gpa-calc">restaurar</button></small>':'<small style="display:block">toca para editar</small>')+'</dd></div>'+
+      '<div><dt>Aprobados</dt><dd>'+fmtCr(a.earned)+(a.earnedPrep?' <small>+'+fmtCr(a.earnedPrep)+' prep.</small>':'')+'</dd></div>'+
+      '<div><dt>Pendientes</dt><dd>'+(a.pending==null?'—':fmtCr(a.pending))+'</dd></div>'+
+      '<div><dt>Graduación</dt><dd>'+esc(a.grad)+'</dd></div>'+
+    '</dl>'+
+    '</div>'+
     '<div class="meta"><span><label for="programSel">Programa </label><select id="programSel"><option value="">Selecciona un programa</option>'+
       programOptions(S.program).map(function(p){return '<option'+(p===currentBase()?' selected':'')+'>'+esc(p)+'</option>';}).join('')+
     '</select></span>'+
@@ -2220,13 +2312,6 @@ function renderStudent(){
       (groupByName(currentBase()).def?'':'<option value="">Selecciona la especialidad</option>')+
       groupByName(currentBase()).specs.map(function(s){return '<option value="'+esc(s[1])+'"'+(s[1]===S.program?' selected':'')+'>'+esc(s[0])+'</option>';}).join('')+
     '</select></span>' : '')+(S.program?'<button class="btn link" data-action="'+(cur?'open-audit':'open-curriculum')+'">'+(cur?'Ver currículo':'Cargar currículo')+'</button>':'')+trInfo+'</div>'+
-    '<dl class="facts">'+
-      '<div><dt><label for="gpaEdit">GPA acumulado</label></dt><dd><input id="gpaEdit" class="gpa-inline" inputmode="decimal" value="'+(a.gpa==null?'':fmt(a.gpa))+'" placeholder="—" title="Toca para editar el GPA">'+
-        (a.gpaEdited?'<small style="display:block">editado · <button class="btn link small" style="padding:0" data-action="gpa-calc">restaurar</button></small>':'<small style="display:block">toca para editar</small>')+'</dd></div>'+
-      '<div><dt>Créditos aprobados</dt><dd>'+fmtCr(a.earned)+(a.earnedPrep?' <small>+'+fmtCr(a.earnedPrep)+' prep.</small>':'')+'</dd></div>'+
-      '<div><dt>Créditos pendientes</dt><dd>'+(a.pending==null?'—':fmtCr(a.pending))+'</dd></div>'+
-      '<div><dt>Graduación estimada</dt><dd>'+esc(a.grad)+'</dd></div>'+
-    '</dl>'+
     (total? '<div class="progress" aria-label="Progreso académico"><div class="bar">'+
       '<i style="width:'+pct(a.prog.done)+'%;background:var(--ok)"></i>'+
       '<i style="width:'+pct(a.prog.ip)+'%;background:var(--ip)"></i></div>'+
@@ -2279,7 +2364,7 @@ function wizardHTML(){
       '<button class="btn big" data-action="hist-new"'+(s1?'':' disabled')+'><strong>Es estudiante nuevo</strong><span>Todavía no ha tomado cursos</span></button></div>' : '';
   var b3 = '<div class="wbtns">'+
       '<button class="btn big primary" data-action="regen"'+(s2?'':' disabled')+'><strong>Que el sistema lo haga</strong><span>Plan completo hasta graduarse, con todas las reglas</span></button>'+
-      '<button class="btn big" data-action="blank-plan"'+(s2?'':' disabled')+'><strong>Lo hago yo, en blanco</strong><span>Armas los trimestres y luego el sistema completa el resto</span></button></div>';
+      '<button class="btn big" data-action="blank-plan"'+(s2?'':' disabled')+'><strong>Lo hago yo, en blanco</strong><span>Armas los trimestres y luego el sistema acomoda el resto</span></button></div>';
   function step(n,cls,title,desc,btns){ return '<li class="wstep '+cls+'"><b>'+(cls==='done'?'✓':n)+'</b><div class="wbody"><strong class="wt">'+title+'</strong><div class="wd">'+desc+'</div>'+(cls==='locked'?'':btns||'')+'</div></li>'; }
   return '<div class="wizard"><h3>Nuevo plan en 3 pasos</h3><ol class="wsteps">'+
     step(1, st(s1,true), 'Estudiante y programa', d1, '')+
@@ -2300,8 +2385,8 @@ function openHelp(){
       'Las <strong>alertas</strong> avisan de probatoria, cursos sin ubicar o reglas que no se cumplen. Tócalas para ver el detalle.' ])+
     sec('3. Cambiar el plan',[ 'Toca <strong>Editar plan</strong>. En cada curso, <strong>Editar</strong> sirve para moverlo de trimestre o quitarlo.',
       'Con <strong>+ Agregar curso</strong> marcas varias clases a la vez para un trimestre; si alguna no cumple un prerrequisito sale un aviso, pero se agrega igual. Con <strong>+ Agregar trimestre</strong> añades más trimestres.',
-      'Los cursos que escoges o mueves a mano quedan <strong>fijos</strong> y llevan un puntito <span class="pin-dot">•</span> junto al código. En <strong>Editar plan</strong> tocas ○/● para fijar o soltar un curso. <strong>Reorganizar</strong> deja los fijos en su trimestre y vuelve a acomodar los demás.',
-      '<strong>Completar el resto</strong> deja lo que pusiste y el sistema planifica lo que falta.',
+      'Los cursos que escoges o mueves a mano quedan <strong>fijos</strong> y llevan un puntito <span class="pin-dot">•</span> junto al código. En <strong>Editar plan</strong> tocas ○/● para fijar o soltar un curso.',
+      '<strong>Acomodar automáticamente</strong> deja tus cursos fijos y el sistema acomoda todo lo demás (también completa un plan en blanco).',
       'Si algo no te gusta, <strong>Restaurar</strong> lo deshace.' ])+
     sec('4. Más opciones',[ '<strong>Terminar antes</strong>: compara cuánto se acorta el plan con más créditos o con Summer.',
       '<strong>Comparar con otro programa</strong>: qué pasaría si el estudiante se cambia de programa.',
@@ -2328,12 +2413,12 @@ function renderPlan(){
   if(canUndoProgram() && !S.prevProgram.hidden) html+='<div class="notice info"><span>Cambiaste de <strong>'+esc(programName(S.prevProgram.program))+'</strong> a <strong>'+esc(programName(S.program))+'</strong>.</span><button class="btn sm" data-action="undo-program">Deshacer cambio de programa</button><button class="btn link" data-action="hide-prevprog">Ocultar</button></div>';
   if(edit){
     html+='<div class="editbar"><strong>Editando el plan</strong><span class="small muted hint">Toca Editar en un curso para moverlo, cambiarlo o eliminarlo.</span><span class="spacer"></span>'+
-      '<button class="btn sm" data-action="complete-plan">Completar el resto</button>'+(collectPins().n?'<button class="btn sm" data-action="reorg">Reorganizar</button>':'')+'<button class="btn sm" data-action="restore">Restaurar</button><button class="btn sm primary" data-action="toggle-edit">Listo</button></div>';
+      '<button class="btn sm" data-action="acomodar">Acomodar automáticamente</button><button class="btn sm" data-action="restore">Restaurar</button><button class="btn sm primary" data-action="toggle-edit">Listo</button></div>';
   } else {
     var credOpts=[3,4,6,7,9,10,12,13,14,15,16,18], clsOpts=[0,1,2,3,4,5,6,7];
     html+='<div class="toolbar">'+
-      (S.plan.blank?'<button class="btn primary" data-action="complete-plan">Completar el resto</button><button class="btn" data-action="toggle-edit">Seguir editando</button>':'<button class="btn primary" data-action="toggle-edit">Editar plan</button>')+
-      (!S.plan.blank && collectPins().n?'<button class="btn" data-action="reorg" title="Deja los cursos fijos en su trimestre y vuelve a acomodar los demás">Reorganizar</button>':'')+
+      '<button class="btn primary" data-action="acomodar" title="Acomoda los cursos según las reglas. Los cursos fijos se quedan en su trimestre.">Acomodar automáticamente</button>'+
+      '<button class="btn" data-action="toggle-edit">Editar plan</button>'+
       '<div class="menu"><button class="btn" data-action="menu" aria-haspopup="true" aria-expanded="false">Descargar PDF ▾</button><div class="menu-list" role="menu">'+
         '<button role="menuitem" data-action="pdf-plan">Plan académico</button>'+
         '<button role="menuitem" data-action="pdf-audit">Hoja del currículo</button>'+
@@ -2341,14 +2426,13 @@ function renderPlan(){
       '</div></div>'+
       ((S.planEdited || S.planBeforeFill || (S.prevLoad && LOAD_KEYS.some(function(k){ return S.prevLoad[k]!==S.plannerRules[k]; })) || canUndoProgram())?'<button class="btn" data-action="restore">Restaurar</button>':'')+
       '<span class="spacer"></span>'+
-      '<div class="menu"><button class="btn" data-action="menu" aria-haspopup="true" aria-expanded="false">Más opciones ▾</button><div class="menu-list" role="menu">'+
+      '<div class="menu"><button class="btn ghost" data-action="menu" aria-haspopup="true" aria-expanded="false">Más ▾</button><div class="menu-list" role="menu">'+
         '<button role="menuitem" data-action="fastest">Terminar antes</button>'+
         '<button role="menuitem" data-action="compare">Comparar con otro programa</button>'+
         (hasPrep?'<button role="menuitem" data-action="preps">Preparatorios que aplican</button>':'')+
         '<hr>'+
-        (S.plan.blank?'':'<button role="menuitem" data-action="complete-plan">Completar el resto automáticamente</button>')+
         '<button role="menuitem" data-action="blank-plan">Empezar plan en blanco</button>'+
-        '<button role="menuitem" data-action="regen">Regenerar plan</button>'+
+        '<button role="menuitem" data-action="regen-fresh">Hacer el plan de cero</button>'+
       '</div></div></div>';
     var loadIn='<div class="loadbar"><label>Créditos <select id="loadCr">'+credOpts.map(function(v){return '<option'+(v===Core.num(pr.maxCredits)?' selected':'')+'>'+v+'</option>';}).join('')+(credOpts.indexOf(Core.num(pr.maxCredits))<0?'<option selected>'+pr.maxCredits+'</option>':'')+'</select></label>'+
       '<label>Clases <select id="loadCl">'+clsOpts.map(function(v){return '<option value="'+v+'"'+(v===(Core.num(pr.maxCourses)||0)?' selected':'')+'>'+(v?v:'Sin límite')+'</option>';}).join('')+'</select></label>'+
@@ -2357,37 +2441,49 @@ function renderPlan(){
   }
     var loadSum=pr.maxCredits+' créditos'+(Core.num(pr.maxCourses)?' · máx. '+pr.maxCourses+' clases':'')+(pr.includeSummer?' · con Summer':' · sin Summer')+(Core.num(S.planTerms)?' · '+S.planTerms+' trimestres':'');
     html+='<details class="loadbox" id="loadBox"'+(session.loadOpen?' open':'')+'><summary><span class="muted">Carga por trimestre:</span> <strong>'+esc(loadSum)+'</strong> <span class="chg">Cambiar</span></summary>'+loadIn+'</details>';
-  html+=alertsHTML()+missingHTML();
-  if(S.historyChanged) html+='<div class="notice info">El plan tiene cambios manuales y el historial o las reglas cambiaron. Los cursos aprobados y las electivas ya se actualizaron; regenera solo si quieres reorganizar todo.<button class="btn link" data-action="regen">Regenerar plan</button></div>';
-  if(pendingSlots) html+='<div class="notice">'+pendingSlots+' electiva'+(pendingSlots>1?'s':'')+' por seleccionar.<button class="btn link" data-action="open-audit">Escoger en el currículo</button></div>';
-  if(S.plan.unscheduled.length) html+='<div class="notice bad"><strong>Cursos que no se pudieron ubicar</strong><ul>'+
-    S.plan.unscheduled.map(function(u){return '<li>'+esc(u.code)+' '+esc(u.name)+': '+esc(u.reason)+'</li>';}).join('')+'</ul></div>';
+  html+=reviewHTML(pendingSlots);
+  if(S.historyChanged) html+='<div class="notice info">El plan tiene cambios manuales y el historial o las reglas cambiaron. Los cursos aprobados y las electivas ya se actualizaron. <button class="btn link" data-action="acomodar">Acomodar automáticamente</button></div>';
   var sgMap=slotGroupMap(cur), stP=Core.buildStatus(cur,S.records,S.plannerRules);
   var nPins=collectPins().n;
-  html+='<div class="pq-legend small muted">Prerrequisitos: <span class="pq pq-done">completado</span> <span class="pq pq-ip">en progreso</span> <span class="pq pq-pend">pendiente</span>'+(nPins||edit?'<span style="margin-left:14px"><span class="pin-dot" style="margin:0 3px 0 0">•</span>curso fijo'+(edit?' (toca ○ para fijar)':'')+'</span>':'')+'</div>';
-  html+='<div class="'+(edit?'editing':'')+'">';
+  html+='<div class="pq-legend small muted"><span><i class="ldot" style="background:var(--ok)"></i>completado</span><span><i class="ldot" style="background:var(--ip)"></i>en progreso</span><span><i class="ldot" style="background:var(--pend)"></i>pendiente</span>'+(nPins||edit?'<span><span class="pin-dot" style="margin:0 4px 0 0">•</span>curso fijo'+(edit?' (toca ○ para fijar)':'')+'</span>':'')+'</div>';
   var win=planWindow(edit);
+  // Bloques por año académico: FA y WI del año Y, SP y SU del año Y+1.
+  var years=[], yIdx={};
   S.plan.terms.forEach(function(t,ti){
     if(win.idx.indexOf(ti)<0) return;
-    var cr=Core.termCredits(t), cap=Core.termCap(t,pr), flag='';
-    if(cr>cap) flag='<span class="flag bad">Excede el máximo de '+cap+'</span>';
-    else if(cr<pr.minCredits && t.courses.length && ti<S.plan.terms.length-1) flag='<span class="flag">Menos de '+pr.minCredits+' créditos</span>';
-    html+='<div class="term" data-term="'+ti+'"><div class="term-head"><h3>'+esc(tS(t.label))+'</h3>'+(function(){ var o=(S.termLimits||{})[Core.Terms.label({season:t.season,year:t.year})]; return o&&(o.credits||o.courses)?'<span class="tag">límite: '+(o.credits?o.credits+' cr':'')+(o.credits&&o.courses?' · ':'')+(o.courses?o.courses+' clases':'')+'</span>':''; })()+(edit?'<button class="btn link small" data-action="edit-term">cambiar</button>':'')+flag+'<span class="tcr">'+fmtCr(cr)+' créditos</span></div>';
-    if(t.courses.length){
-      html+='<table class="ctable"><colgroup><col style="width:104px"><col><col style="width:76px"><col style="width:96px"><col style="width:26%">'+(edit?'<col style="width:78px">':'')+'</colgroup>'+
-        '<thead><tr><th>Curso</th><th>Descripción</th><th class="cr">Créditos</th><th>Estado/Nota</th><th>Prerrequisito</th>'+(edit?'<th></th>':'')+'</tr></thead><tbody>';
-      t.courses.forEach(function(c){
-        var eg=planElecGroup(c,cur,sgMap);
-        var tags=(eg?elecTag(eg):'')+(c.placeholder?'<span class="tag">por seleccionar</span>':'')+(c.type==='PREP'?'<span class="tag">preparatorio</span>':'')+(c.type==='CAP'?'<span class="tag">proyecto</span>':'')+(c.offer?'<span class="tag">solo '+esc(c.offer.join('/'))+'</span>':'');
-        html+='<tr data-uid="'+c.uid+'"><td class="code">'+esc(c.code)+(c.fixed?'':(edit?'<button class="pinbtn'+(c.pinned?' on':'')+'" data-action="toggle-pin" title="'+(c.pinned?'Fijo: se queda en este trimestre al reorganizar. Toca para soltarlo.':'Toca para dejarlo fijo en este trimestre.')+'" aria-label="'+(c.pinned?'Soltar':'Fijar')+' '+esc(c.code)+'">'+(c.pinned?'●':'○')+'</button>':(c.pinned?'<span class="pin-dot" title="Fijo: se queda en este trimestre al reorganizar." aria-label="fijo">•</span>':'')))+'</td><td class="desc">'+esc(c.name||'')+tags+'</td>'+
-          '<td class="cr">'+fmtCr(c.credits)+'</td><td class="st '+gradeClass(c.grade)+'">'+esc(c.grade||'')+'</td>'+
-          '<td class="pre">'+prereqHTML(c,stP)+'</td>'+
-          (edit?'<td class="act"><button class="btn sm" data-action="edit-course">Editar</button></td>':'')+'</tr>';
-      });
-      html+='</tbody></table>';
-    } else html+='<p class="muted small" style="border-top:2px solid var(--accent);padding-top:8px">Sin cursos en este trimestre.</p>';
-    if(edit) html+='<button class="btn link add" data-action="add-course">+ Agregar curso</button>';
-    html+='</div>';
+    var ay=(t.season==='Fall'||t.season==='Winter')?+t.year:+t.year-1;
+    if(yIdx[ay]==null){ yIdx[ay]=years.length; years.push({ay:ay, terms:[]}); }
+    years[yIdx[ay]].terms.push(ti);
+  });
+  html+='<div class="years'+(edit?' editing':'')+'">';
+  years.forEach(function(y, yi){
+    var ycr=y.terms.reduce(function(s,ti){ return s+Core.termCredits(S.plan.terms[ti]); },0);
+    html+='<section class="yearblock"><div class="yh"><h3>Año '+(yi+1)+'</h3><span class="muted">'+y.ay+'–'+(y.ay+1)+'</span><span class="ycr">'+fmtCr(ycr)+' créditos</span></div><div class="ygrid'+(pr.includeSummer?' four':'')+'">';
+    y.terms.forEach(function(ti){
+      var t=S.plan.terms[ti];
+      var cr=Core.termCredits(t), cap=Core.termCap(t,pr), flag='';
+      if(cr>cap) flag='<span class="flag bad">Excede '+cap+'</span>';
+      else if(cr<pr.minCredits && t.courses.length && ti<S.plan.terms.length-1) flag='<span class="flag">Menos de '+pr.minCredits+'</span>';
+      var lim=(function(){ var o=(S.termLimits||{})[Core.Terms.label({season:t.season,year:t.year})]; return o&&(o.credits||o.courses)?'<span class="tag">límite: '+(o.credits?o.credits+' cr':'')+(o.credits&&o.courses?' · ':'')+(o.courses?o.courses+' clases':'')+'</span>':''; })();
+      html+='<div class="term card" data-term="'+ti+'"><div class="term-head"><h4>'+esc(tS(t.label))+'</h4>'+lim+(edit?'<button class="btn link small" data-action="edit-term">cambiar</button>':'')+flag+'<span class="tcr">'+fmtCr(cr)+' cr</span></div>';
+      if(t.courses.length){
+        t.courses.forEach(function(c){
+          var eg=planElecGroup(c,cur,sgMap);
+          var tags=(eg?elecTag(eg):'')+(c.placeholder?'<span class="tag">por escoger</span>':'')+(c.type==='PREP'?'<span class="tag">prep.</span>':'')+(c.type==='CAP'?'<span class="tag">proyecto</span>':'')+(c.offer?'<span class="tag">solo '+esc(c.offer.map(function(o){return o.slice(0,2).toUpperCase();}).join('/'))+'</span>':'');
+          var pin=c.fixed?'':(edit?'<button class="pinbtn'+(c.pinned?' on':'')+'" data-action="toggle-pin" title="'+(c.pinned?'Fijo: se queda en este trimestre al acomodar. Toca para soltarlo.':'Toca para dejarlo fijo en este trimestre.')+'" aria-label="'+(c.pinned?'Soltar':'Fijar')+' '+esc(c.code)+'">'+(c.pinned?'●':'○')+'</button>':(c.pinned?'<span class="pin-dot" title="Fijo: se queda en este trimestre al acomodar." aria-label="fijo">•</span>':''));
+          var pre=prereqHTML(c,stP);
+          html+='<div class="crow '+(c.grade==='IP'||c.fixed?'ip':'')+'" data-uid="'+c.uid+'">'+
+            '<div class="cl1"><span class="code">'+esc(c.code)+'</span>'+pin+'<span class="nm">'+esc(c.name||'')+'</span><span class="ccr">'+fmtCr(c.credits)+'</span>'+
+            (c.grade?'<span class="cg '+gradeClass(c.grade)+'">'+esc(c.grade)+'</span>':'')+
+            (edit?'<button class="btn sm edbtn" data-action="edit-course" aria-label="Editar '+esc(c.code)+'">Editar</button>':'')+'</div>'+
+            ((tags||pre)?'<div class="cl2">'+tags+(pre?'<span class="pre">'+pre+'</span>':'')+'</div>':'')+
+          '</div>';
+        });
+      } else html+='<p class="muted small" style="margin:6px 0">Sin cursos en este trimestre.</p>';
+      if(edit) html+='<button class="btn link add" data-action="add-course">+ Agregar clases</button>';
+      html+='</div>';
+    });
+    html+='</div></section>';
   });
   html+='</div>';
   if(win.limited) html+='<div class="notice info" style="display:block"><strong>Se muestran '+win.n+' trimestre'+(win.n>1?'s':'')+'.</strong> Después quedan '+win.rest.length+' cursos ('+fmtCr(win.restCr)+' créditos) por planificar; la graduación estimada sigue siendo '+esc(academicSummary().grad)+'. <button class="btn link" data-action="plan-all">Ver plan completo</button></div>';
@@ -2560,7 +2656,7 @@ function startBlankPlan(){
     S.planBeforeFill=null;
     S.plan={terms:terms, unscheduled:[], blank:true}; S.planOriginal=null; S.planEdited=true; S.historyChanged=false; S.wizardSeen=true; session.showWizard=false;
     session.editMode=true; save(); renderAll();
-    toast('Plan en blanco listo. Agrega cursos y trimestres; cuando quieras, pulsa "Completar el resto".');
+    toast('Plan en blanco listo. Agrega clases y trimestres; cuando quieras, pulsa "Acomodar automáticamente".');
   }
   if(S.plan && S.plan.terms.some(function(t){ return t.courses.length; })){
     modal({title:'Plan en blanco', narrow:true, body:'<p>Empezar un plan en blanco reemplaza el plan actual de este estudiante. ¿Deseas continuar?</p>',
@@ -2597,6 +2693,20 @@ function completePlan(){
   S.planOriginal=clone(S.plan); S.planEdited=false; S.historyChanged=false;
   session.editMode=false; save(); renderAll();
   toast('Plan completado: se añadieron '+added+' cursos en '+rest.length+' trimestres.');
+}
+/** Botón único: acomoda el plan según las reglas respetando los cursos fijos (o completa un plan en blanco). */
+function acomodar(){
+  if(!S.plan){ regenWithConfirm(); return; }
+  if(S.plan.blank){ completePlan(); return; }
+  var pk=collectPins();
+  function go(){
+    var prev=clone(S.plan); session.editMode=false; regenerate(true); S.planBeforeFill=prev; save(); renderAll();
+    toast(pk.n?'Plan acomodado: '+pk.n+' curso'+(pk.n>1?'s':'')+' fijo'+(pk.n>1?'s':'')+' en su lugar.':'Plan acomodado.');
+  }
+  if(!pk.n && S.planEdited){
+    modal({title:'Acomodar automáticamente', narrow:true, body:'<p style="margin-top:0">El plan tiene cambios a mano, pero ningún curso fijo. Al acomodar se reorganiza todo. Si quieres conservar algún curso donde está, fíjalo primero (toca ○ en Editar plan).</p>',
+      buttons:[{label:'Cancelar'},{label:'Acomodar',primary:true,onClick:go}]});
+  } else go();
 }
 function regenWithConfirm(){
   var pk=collectPins();
@@ -3860,9 +3970,10 @@ document.addEventListener('click',function(e){
   else if(a==='hist-undo'){ S.histNew=false; save(); renderAll(); }
   else if(a==='regen') regenWithConfirm();
   else if(a==='blank-plan') startBlankPlan();
-  else if(a==='complete-plan') completePlan();
+  else if(a==='complete-plan' || a==='acomodar') acomodar();
+  else if(a==='regen-fresh'){ modal({title:'Hacer el plan de cero', narrow:true, body:'<p style="margin-top:0">Se genera un plan nuevo con todas las reglas, <strong>sin</strong> respetar los cursos fijos ni los cambios a mano. Podrás deshacerlo con Restaurar.</p>', buttons:[{label:'Cancelar'},{label:'Hacer de cero',primary:true,onClick:function(){ var prev=clone(S.plan); session.editMode=false; regenerate(false,{fresh:true}); S.planBeforeFill=prev; save(); renderAll(); }}]}); }
   else if(a==='reorg'){ var np=collectPins().n, prevPlan=clone(S.plan); session.editMode=false; regenerate(true); S.planBeforeFill=prevPlan; save(); renderAll(); toast('Plan reorganizado: '+np+' curso'+(np>1?'s':'')+' fijo'+(np>1?'s':'')+' en su lugar y el resto acomodado de nuevo.'); }
-  else if(a==='toggle-pin'){ var fu=findCourse(btn.closest('tr').getAttribute('data-uid')); if(fu){ fu.c.pinned=!fu.c.pinned; commitEdit(); } }
+  else if(a==='toggle-pin'){ var fu=findCourse(btn.closest('[data-uid]').getAttribute('data-uid')); if(fu){ fu.c.pinned=!fu.c.pinned; commitEdit(); } }
   else if(a==='toggle-edit'){ session.editMode=!session.editMode; renderPlan(); }
   else if(a==='restore') openRestore();
   else if(a==='plan-all'){ S.planTerms=0; save(); renderAll(); }
@@ -3871,7 +3982,7 @@ document.addEventListener('click',function(e){
   else if(a==='view-transcript') viewTranscript();
   else if(a==='pdf-plan') askPDF(exportPlanPDF,{missing:true,notes:true});
   else if(a==='pdf-transcript') askPDF(exportTranscriptPDF);
-  else if(a==='edit-course') openCourseEditor(btn.closest('tr').getAttribute('data-uid'));
+  else if(a==='edit-course') openCourseEditor(btn.closest('[data-uid]').getAttribute('data-uid'));
   else if(a==='edit-term') openTermEditor(+btn.closest('.term').getAttribute('data-term'));
   else if(a==='add-course') openAddCourse(+btn.closest('.term').getAttribute('data-term'));
   else if(a==='add-term'){ addNewTerm(); commitEdit(); }
@@ -3879,8 +3990,8 @@ document.addEventListener('click',function(e){
   else if(a==='add-rec') openRecordEditor(null);
 });
 document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeMenus(); if(e.key==='Enter' && e.target && e.target.id==='gpaEdit') e.target.blur(); });
-document.addEventListener('toggle',function(e){ if(e.target.id==='rulesBox') session.rulesOpen=e.target.open; if(e.target.id==='alertsBox') session.alertsOpen=e.target.open; if(e.target.id==='loadBox') session.loadOpen=e.target.open; if(e.target.id==='missBox') session.missOpen=e.target.open; },true);
-document.addEventListener('input',function(e){ if(e.target && e.target.id==='planNotes'){ S.notes=e.target.value; save(); } });
+document.addEventListener('toggle',function(e){ if(e.target.id==='rulesBox') session.rulesOpen=e.target.open; if(e.target.id==='alertsBox') session.alertsOpen=e.target.open; if(e.target.id==='loadBox') session.loadOpen=e.target.open; if(e.target.id==='missBox') session.missOpen=e.target.open; if(e.target.id==='reviewBox') session.reviewOpen=e.target.open; },true);
+document.addEventListener('input',function(e){ if(!e.target) return; if(e.target.id==='planNotes'){ S.notes=e.target.value; save(); } else if(e.target.id==='stName'){ S.student.name=e.target.value.trim(); save(); } else if(e.target.id==='stId'){ S.student.id=e.target.value.trim(); save(); } });
 document.addEventListener('change',function(e){
   var t=e.target;
   if(t.id==='stName'){ S.student.name=t.value.trim(); save(); return; }
