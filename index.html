@@ -220,6 +220,7 @@ pre.raw{white-space:pre-wrap;font-size:12px;background:var(--soft);padding:12px;
 /* Tipos de electiva */
 .tag.k-libre{background:color-mix(in srgb,var(--ip) 16%,transparent);color:var(--ip)}
 .tag.k-tec{background:color-mix(in srgb,#7a4fb5 16%,transparent);color:#7a4fb5}
+.tag.k-fijo{background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent)}
 .tag.k-sohu{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)}
 table.sh .tag{font-size:9.5px;padding:0 5px;margin-left:2px}
 /* Alertas */
@@ -884,13 +885,19 @@ var Core = (function () {
       grade: grade || '', placeholder: !!u.placeholder, fixed: !!u.fixed, slot: u.slot || null, offer: u.offer || null };
   }
 
-  function generatePlan(curr, records, electiveSel, pr, exempt) {
+  function generatePlan(curr, records, electiveSel, pr, exempt, pins) {
     exempt = exempt || [];
+    // Cursos fijos que el consejero escogió a mano: {"FA 2026": [cursos], ...}. Se respetan en su trimestre.
+    pins = pins || {};
+    var pinCodes = {}, pinSlots = {}, pinGroup = {}, pinsLeft = 0;
+    Object.keys(pins).forEach(function (lbl) { (pins[lbl] || []).forEach(function (c) { pinsLeft++; pinCodes[c.code] = true; if (c.slot) pinSlots[c.slot] = true; if (c.placeholder) pinSlots[c.code] = true; }); });
     pr = Object.assign({}, DEFAULT_PLANNER_RULES, pr || {});
     electiveSel = electiveSel || {};
     var st = buildStatus(curr, records, pr);
     var byCurr = {};
     curr.courses.forEach(function (c) { byCurr[c.code] = c; });
+    Object.keys(pinCodes).forEach(function (code) { var o = byCurr[code]; if (o && o.type === 'OPC') pinGroup[o.group] = (pinGroup[o.group] || 0) + 1; });
+    Object.keys(pinSlots).forEach(function (s) { var o = byCurr[s]; if (o && o.type === 'ELEC') pinGroup[o.group] = Math.max(0, (pinGroup[o.group] || 0)); });
     var depth = depthMap(curr.courses);
     // Ruta crítica: cursos en la cadena más larga (p. ej. los 15 talleres de Arquitectura).
     var height = {}, byC = {};
@@ -910,6 +917,7 @@ var Core = (function () {
     // IP: fijos en el primer trimestre del plan.
     var ipUnits = [];
     Object.keys(st.ip).forEach(function (code) {
+      if (pinCodes[code]) return;
       var r = st.ip[code], c = byCurr[code];
       ipUnits.push(toPlanCourse(c ? Object.assign({}, c, { fixed: true }) :
         { code: code, name: r.title || '', credits: num(r.credits), type: 'REQ', fixed: true }, 'IP'));
@@ -922,6 +930,8 @@ var Core = (function () {
       if (c.type === 'ELEC') {
         var s = st.slots[c.code];
         if (s && s.status !== 'pending') return;
+        if (pinSlots[c.code]) return;
+        if (pinGroup[c.group] > 0) { pinGroup[c.group]--; return; }
         var selCode = electiveSel[c.code];
         var opt = selCode && byCurr[selCode];
         var already = opt && pending.filter(function (p) { return p.code === opt.code; })[0];
@@ -943,6 +953,7 @@ var Core = (function () {
         return;
       }
       var s2 = st.byCode[c.code];
+      if (pinCodes[c.code]) return;
       if (s2 && s2.status === 'pending' && !(c.type === 'PREP' && exempt.indexOf(c.code) >= 0)) pending.push(c);
     });
 
@@ -973,10 +984,12 @@ var Core = (function () {
     }
 
     var terms = [], t = { season: pr.startSeason, year: +pr.startYear }, k = 0;
-    while ((pending.length || (k === 0 && ipUnits.length)) && k < 60) {
+    while ((pending.length || pinsLeft > 0 || (k === 0 && ipUnits.length)) && k < 60) {
       var term = { season: t.season, year: t.year, label: Terms.label(t), courses: [] };
       var cap = termCap(t, pr), cr = 0, limit = cap;
       if (k === 0) ipUnits.forEach(function (u) { term.courses.push(u); cr += u.credits; });
+      (pins[term.label] || []).forEach(function (c) { var pc = Object.assign({}, c, { pinned: true, uid: uid() }); term.courses.push(pc); cr += num(c.credits); pinsLeft--; });
+      if (pins[term.label]) delete pins[term.label];
       var before = new Set(done);
       var placed = [];
       var termNo = k + 1;
@@ -1050,7 +1063,7 @@ var Core = (function () {
       if (!term.courses.length) {
         // Trimestre sin cursos porque lo pendiente no se ofrece en esta temporada: se salta y se sigue.
         var waiting = pending.some(function (u) { return prereqOK(u, before) && !offeredIn(u, t.season); });
-        if (!waiting) break;
+        if (!waiting && !(pinsLeft > 0)) break;
         term.skipped = true;
       }
       terms.push(term);
@@ -1073,6 +1086,7 @@ var Core = (function () {
           : miss.length ? 'Prerrequisito no alcanzable: ' + miss.join(', ') + '.' : 'No se pudo ubicar.' };
     });
 
+    Object.keys(pins).forEach(function (lbl) { (pins[lbl] || []).forEach(function (c) { unscheduled.push({ code: c.code, name: c.name, credits: c.credits, reason: 'Estaba fijo en ' + lbl + ', que queda antes del inicio del plan.' }); }); });
     var plan = { terms: terms, unscheduled: unscheduled };
     st.approvedCodes = st.approvedCodes.concat(exempt.filter(function (c) { return byCurr[c] && byCurr[c].type === 'PREP'; }));
     mergeSmallTerms(plan, pr, st);
@@ -1101,7 +1115,7 @@ var Core = (function () {
       for (var k = plan.terms.length - 1; k >= 1; k--) {
         var term = plan.terms[k];
         if (termCredits(term) >= pr.minCredits) continue;
-        var movable = term.courses.filter(function (c) { return !c.fixed; });
+        var movable = term.courses.filter(function (c) { return !c.fixed && !c.pinned; });
         movable.forEach(function (c) {
           for (var j = k - 1; j >= 0; j--) {
             var tj = plan.terms[j];
@@ -1129,7 +1143,7 @@ var Core = (function () {
           }
         });
         if (!term.courses.length) {
-          var hasOffer = plan.terms.some(function (tt) { return tt.courses.some(function (c) { return c.offer; }); });
+          var hasOffer = plan.terms.some(function (tt) { return tt.courses.some(function (c) { return c.offer || c.pinned; }); });
           if (!hasOffer) { plan.terms.splice(k, 1); relabel(plan, pr); changed = true; }
         }
       }
@@ -1149,7 +1163,7 @@ var Core = (function () {
       moved = false;
       for (var i = T.length - 1; i > start - 1 && i >= 1; i--) {
         var A = T[i - 1], B = T[i];
-        var cands = A.courses.filter(function (x) { return !x.fixed && x.type !== 'CAP' && x.grade !== 'IP'; })
+        var cands = A.courses.filter(function (x) { return !x.fixed && !x.pinned && x.type !== 'CAP' && x.grade !== 'IP'; })
           .sort(function (x, y) { return (y.placeholder ? 1 : 0) - (x.placeholder ? 1 : 0); });
         for (var k = 0; k < cands.length; k++) {
           var c = cands[k], cr = num(c.credits);
@@ -1174,7 +1188,7 @@ var Core = (function () {
       var low = T[i2];
       for (var j2 = i2 - 1; j2 >= 0 && termCredits(low) < pr.minCredits; j2--) {
         if (pr.ipTermOnly !== false && low.courses.some(function (x) { return x.fixed || x.grade === 'IP'; })) break;
-        T[j2].courses.filter(function (x) { return x.placeholder && !x.fixed; }).forEach(function (x) {
+        T[j2].courses.filter(function (x) { return x.placeholder && !x.fixed && !x.pinned; }).forEach(function (x) {
           if (termCredits(low) >= pr.minCredits) return;
           if (termCredits(T[j2]) - num(x.credits) < pr.minCredits) return;
           if (termCredits(low) + num(x.credits) > termLimit(low, pr)) return;
@@ -1196,7 +1210,7 @@ var Core = (function () {
     var lastK = nonEmpty.slice(-k);
     if (capIdx.every(function (v, i) { return v === lastK[i]; })) return;   // ya están al final
     var first = capIdx[0], tail = T.slice(first, last + 1);
-    if (tail.some(function (t) { return t.courses.some(function (c) { return c.fixed || c.grade === 'IP'; }); })) return;
+    if (tail.some(function (t) { return t.courses.some(function (c) { return c.fixed || c.pinned || c.grade === 'IP'; }); })) return;
     var stages = capIdx.map(function (i) { return T[i].courses.filter(isCap); });
     var capCodes = new Set(); stages.forEach(function (s) { s.forEach(function (c) { capCodes.add(c.code); }); });
     var others = []; tail.forEach(function (t) { t.courses.forEach(function (c) { if (!isCap(c)) others.push({ c: c, from: t }); }); });
@@ -1416,11 +1430,11 @@ function gpaResult(){ return Core.computeGPA(S.records, S.gpaRules, prepTypeOf(c
 function baseDone(){ return new Set(Core.buildStatus(curr(), S.records, S.plannerRules).approvedCodes.concat(exemptList())); }
 
 /* ---------------- Varios estudiantes ---------------- */
-var STUDENT_FIELDS=['histNew','planBeforeFill','prevProgram','planTerms','student','records','officialGPA','officialTotals','termLimits','useOfficialGPA','gpaOverride','transcriptText','transcriptName','plan','planOriginal','planEdited','historyChanged','electiveSel','prepExempt','program','programBase'];
+var STUDENT_FIELDS=['notes','histNew','planBeforeFill','prevProgram','planTerms','student','records','officialGPA','officialTotals','termLimits','useOfficialGPA','gpaOverride','transcriptText','transcriptName','plan','planOriginal','planEdited','historyChanged','electiveSel','prepExempt','program','programBase'];
 function snapshotStudent(){ var o={}; STUDENT_FIELDS.forEach(function(k){ o[k]=S[k]; }); o.updated=Date.now(); return JSON.parse(JSON.stringify(o)); }
 function hasStudentData(){ return !!(S.student && (S.student.name || S.student.id)) || S.records.length>0; }
 function blankStudentFields(){
-  S.planTerms=0; S.histNew=false; S.prevProgram=null; S.planBeforeFill=null;
+  S.planTerms=0; S.histNew=false; S.notes=''; S.prevProgram=null; S.planBeforeFill=null;
   S.student={name:''}; S.records=[]; S.officialGPA=null; S.officialTotals=null; S.termLimits={}; S.useOfficialGPA=false; S.gpaOverride=null; S.transcriptText=''; S.transcriptName='';
   S.plan=null; S.planOriginal=null; S.planEdited=false; S.historyChanged=false; S.electiveSel={}; S.prepExempt={};
 }
@@ -2043,7 +2057,7 @@ function switchProgram(key){
       S.electiveSel[x.slot]=x.code;
     });
   }
-  session.editMode=false; save(); regenerate(true);
+  session.editMode=false; save(); regenerate(true,{fresh:true});
   toast('Programa cambiado a '+programName(key)+'.');
 }
 function canUndoProgram(){ return !!(S.prevProgram && S.prevProgram.to===S.program); }
@@ -2170,7 +2184,8 @@ function renderTabs(){
   var t=session.tab;
   $('tabs').innerHTML=
     '<button role="tab" id="tab-plan" aria-controls="panel" aria-selected="'+(t==='plan')+'" data-tab="plan">Plan académico</button>'+
-    '<button role="tab" id="tab-hist" aria-controls="panel" aria-selected="'+(t==='hist')+'" data-tab="hist">Historial y GPA'+(S.records.length?'<span class="count">'+S.records.length+'</span>':'')+'</button>';
+    '<button role="tab" id="tab-hist" aria-controls="panel" aria-selected="'+(t==='hist')+'" data-tab="hist">Historial y GPA'+(S.records.length?'<span class="count">'+S.records.length+'</span>':'')+'</button>'+
+    '<button role="tab" id="tab-notes" aria-controls="panel" aria-selected="'+(t==='notes')+'" data-tab="notes">Notas'+(S.notes&&S.notes.trim()?'<span class="count">●</span>':'')+'</button>';
 }
 
 /* ---------------- Inicio guiado: estudiante → historial → plan ---------------- */
@@ -2227,12 +2242,14 @@ function openHelp(){
       'Las <strong>alertas</strong> avisan de probatoria, cursos sin ubicar o reglas que no se cumplen. Tócalas para ver el detalle.' ])+
     sec('3. Cambiar el plan',[ 'Toca <strong>Editar plan</strong>. En cada curso, <strong>Editar</strong> sirve para moverlo de trimestre o quitarlo.',
       'Con <strong>+ Agregar curso</strong> y <strong>+ Agregar trimestre</strong> armas el plan a tu manera.',
+      'Los cursos que escoges o mueves a mano quedan marcados como <span class="tag k-fijo">fijo</span>. Al generar el plan otra vez puedes <strong>mantenerlos</strong> en su trimestre o empezar de cero.',
       '<strong>Completar el resto</strong> deja lo que pusiste y el sistema planifica lo que falta.',
       'Si algo no te gusta, <strong>Restaurar</strong> lo deshace.' ])+
     sec('4. Más opciones',[ '<strong>Terminar antes</strong>: compara cuánto se acorta el plan con más créditos o con Summer.',
       '<strong>Comparar con otro programa</strong>: qué pasaría si el estudiante se cambia de programa.',
       '<strong>Preparatorios que aplican</strong>: marca los preparatorios que el estudiante no necesita.' ])+
     sec('5. Descargar y guardar',[ '<strong>Descargar PDF</strong> crea el plan, la hoja del currículo o el transcript con el membrete. Puedes incluir tu firma.',
+      'En la pestaña <strong>Notas</strong> escribes lo hablado con el estudiante; puedes incluirlo en el PDF del plan.',
       'Los estudiantes se guardan solos <strong>en este navegador</strong>. En <strong>Estudiantes → Exportar respaldo</strong> guardas una copia; guárdala en tu OneDrive de PUPR.' ])+
     sec('6. GPA',[ 'Se calcula con la regla de PUPR. Si el oficial es distinto, toca el GPA para escribirlo; <strong>restaurar</strong> vuelve al calculado.' ]);
   modal({title:'Cómo usar el planificador', body:body, buttons:[{label:'Ver el inicio guiado', left:true, onClick:function(){ session.showWizard=true; if(S.plan){ toast('El inicio guiado sale cuando abres un estudiante sin plan (Nuevo estudiante).'); } renderAll(); }},{label:'Entendido',primary:true}]});
@@ -2301,7 +2318,7 @@ function renderPlan(){
         '<thead><tr><th>Curso</th><th>Descripción</th><th class="cr">Créditos</th><th>Estado/Nota</th><th>Prerrequisito</th>'+(edit?'<th></th>':'')+'</tr></thead><tbody>';
       t.courses.forEach(function(c){
         var eg=planElecGroup(c,cur,sgMap);
-        var tags=(eg?elecTag(eg):'')+(c.placeholder?'<span class="tag">por seleccionar</span>':'')+(c.type==='PREP'?'<span class="tag">preparatorio</span>':'')+(c.type==='CAP'?'<span class="tag">proyecto</span>':'')+(c.offer?'<span class="tag">solo '+esc(c.offer.join('/'))+'</span>':'');
+        var tags=(c.pinned?'<span class="tag k-fijo" title="Lo escogiste o moviste a mano. Al generar el plan se queda en este trimestre.">fijo</span>':'')+(eg?elecTag(eg):'')+(c.placeholder?'<span class="tag">por seleccionar</span>':'')+(c.type==='PREP'?'<span class="tag">preparatorio</span>':'')+(c.type==='CAP'?'<span class="tag">proyecto</span>':'')+(c.offer?'<span class="tag">solo '+esc(c.offer.join('/'))+'</span>':'');
         html+='<tr data-uid="'+c.uid+'"><td class="code">'+esc(c.code)+'</td><td class="desc">'+esc(c.name||'')+tags+'</td>'+
           '<td class="cr">'+fmtCr(c.credits)+'</td><td class="st '+gradeClass(c.grade)+'">'+esc(c.grade||'')+'</td>'+
           '<td class="pre">'+prereqHTML(c,stP)+'</td>'+
@@ -2319,6 +2336,12 @@ function renderPlan(){
   el.innerHTML=html;
 }
 
+/* ---------------- Notas del consejero ---------------- */
+function renderNotes(){
+  $('panel').innerHTML='<p class="small muted" style="margin-top:0">Notas de las reuniones con '+(S.student.name?esc(S.student.name):'este estudiante')+'. Se guardan solas con el estudiante y puedes incluirlas en el PDF del plan.</p>'+
+    '<div class="row" style="margin-bottom:8px"><button class="btn sm" data-action="note-date">Añadir fecha de hoy</button></div>'+
+    '<textarea id="planNotes" rows="14" style="font-family:inherit;font-size:15px;line-height:1.5" placeholder="Ej.: 20/10/2026: Se orientó sobre probatoria. Tomará 9 créditos en el próximo trimestre.">'+esc(S.notes||'')+'</textarea>';
+}
 /* ---------------- Historial y GPA ---------------- */
 function renderHistory(){
   var el=$('panel');
@@ -2353,7 +2376,7 @@ function gradeOptions(sel, allowBlank){
 
 function renderAll(){
   renderStudent(); renderTabs();
-  if(session.tab==='hist') renderHistory(); else renderPlan();
+  if(session.tab==='hist') renderHistory(); else if(session.tab==='notes') renderNotes(); else renderPlan();
 }
 
 /* ---------------- Editores (modales) ---------------- */
@@ -2391,6 +2414,7 @@ function openCourseEditor(uid){
     '<label class="field">Trimestre<select data-e="term">'+S.plan.terms.map(function(t,i){return '<option value="'+i+'"'+(i===f.ti?' selected':'')+'>'+esc(tS(t.label))+' ('+fmtCr(Core.termCredits(t))+' cr)</option>';}).join('')+'<option value="new">Nuevo trimestre al final</option></select></label>'+
     '<div class="grid2"><label class="field">Créditos<input data-e="credits" inputmode="decimal" value="'+esc(c.credits)+'"></label>'+
     '<label class="field">Estado/Nota<select data-e="grade">'+gradeOptions(c.grade,true)+'</select></label></div>'+
+    (c.fixed?'':'<div class="checklist" style="margin:0 0 8px"><label><input type="checkbox" data-e="pinned"'+(c.pinned?' checked':'')+'><span><strong>Fijo en este trimestre</strong><br><span class="small muted">Al generar el plan de nuevo, este curso se queda donde está.</span></span></label></div>')+
     (c.placeholder?'':'<fieldset style="border:none;padding:0;margin:4px 0 0"><legend class="small muted" style="padding:0;margin-bottom:6px">Se ofrece en (sin marcar = todos los trimestres)</legend><div class="row">'+
       ['Fall','Winter','Spring','Summer'].map(function(sn){ return '<label class="small" style="display:flex;gap:6px;align-items:center;margin-right:10px"><input type="checkbox" data-off value="'+sn+'"'+(c.offer&&c.offer.indexOf(sn)>=0?' checked':'')+'>'+sn+'</label>'; }).join('')+'</div></fieldset>');
   modal({title:'Editar curso', narrow:true, body:body, buttons:[
@@ -2398,8 +2422,9 @@ function openCourseEditor(uid){
     {label:'Cancelar'},
     {label:'Guardar', primary:true, onClick:function(b){
       var cr=Core.num(b.querySelector('[data-e="credits"]').value), gr=b.querySelector('[data-e="grade"]').value, tv=b.querySelector('[data-e="term"]').value;
-      var changed = cr!==Core.num(c.credits) || gr!==(c.grade||'');
-      c.credits=cr; c.grade=gr;
+      var pinBox=b.querySelector('[data-e="pinned"]'), pinV=pinBox?pinBox.checked:!!c.pinned;
+      var changed = cr!==Core.num(c.credits) || gr!==(c.grade||'') || pinV!==!!c.pinned;
+      c.credits=cr; c.grade=gr; c.pinned=pinV;
       var offBoxes=b.querySelectorAll('[data-off]');
       if(offBoxes.length){
         var off=[].slice.call(offBoxes).filter(function(x){return x.checked;}).map(function(x){return x.value;});
@@ -2439,16 +2464,24 @@ function fillRecordsFromCurriculum(){
   });
   return changed;
 }
-function regenerate(silent){
+/** Cursos que el consejero dejó fijos en un trimestre (los escogió o movió a mano). */
+function collectPins(){
+  var pins={}, n=0;
+  if(!S.plan) return {pins:pins, n:0};
+  S.plan.terms.forEach(function(t){ t.courses.forEach(function(c){ if(c.pinned && !c.fixed){ (pins[t.label]=pins[t.label]||[]).push(clone(c)); n++; } }); });
+  return {pins:pins, n:n};
+}
+function regenerate(silent, opts){
+  opts=opts||{};
   fillRecordsFromCurriculum();
   var cur=curr();
   if(!cur){ toast('Carga el currículo del programa primero.'); return; }
-  var plan;
-  try{ plan=Core.generatePlan(cur, S.records, S.electiveSel, prEff(), exemptList()); }
+  var plan, pk=opts.fresh?{pins:{},n:0}:collectPins();
+  try{ plan=Core.generatePlan(cur, S.records, S.electiveSel, prEff(), exemptList(), pk.pins); }
   catch(err){ showError('No se pudo generar el plan', err); return; }
   S.plan=plan; S.planOriginal=clone(plan); S.planEdited=false; S.historyChanged=false; S.planBeforeFill=null; S.wizardSeen=true; session.showWizard=false;
   save(); renderAll();
-  if(!silent) toast('Plan generado: '+plan.terms.length+' trimestres.');
+  if(!silent) toast('Plan generado: '+plan.terms.filter(function(x){return x.courses.length;}).length+' trimestres'+(pk.n?', con tus '+pk.n+' cursos fijos en su lugar.':'.'));
 }
 /* ---------------- Plan en blanco y completar automáticamente ---------------- */
 function startBlankPlan(){
@@ -2481,6 +2514,7 @@ function completePlan(){
   T.forEach(function(t,i){ if(t.courses.length) last=i; });
   if(last<0){ regenerate(); return; }
   var manual=clone(T.slice(0,last+1));
+  manual.forEach(function(t){ t.courses.forEach(function(c){ if(!c.fixed) c.pinned=true; }); });
   var pseudo=[], codes={}, slots={};
   manual.forEach(function(t){ t.courses.forEach(function(c){
     codes[c.code]=true; if(c.slot) slots[c.slot]=true; if(c.placeholder) slots[c.code]=true;
@@ -2505,6 +2539,12 @@ function completePlan(){
   toast('Plan completado: se añadieron '+added+' cursos en '+rest.length+' trimestres.');
 }
 function regenWithConfirm(){
+  var pk=collectPins();
+  if(pk.n){
+    modal({title:'Generar el plan', narrow:true, body:'<p style="margin-top:0">Tienes <strong>'+pk.n+' curso'+(pk.n>1?'s':'')+' fijo'+(pk.n>1?'s':'')+'</strong> que escogiste o moviste a mano (marcados con <span class="tag k-fijo">fijo</span>). ¿Qué quieres hacer?</p>',
+      buttons:[{label:'Cancelar'},{label:'Empezar de cero', onClick:function(){ regenerate(false,{fresh:true}); }},{label:'Mantener mis cursos',primary:true,onClick:function(){ regenerate(); }}]});
+    return;
+  }
   if(S.planEdited){
     modal({title:'Regenerar plan', body:'<p>Regenerar reemplaza los cambios manuales del plan actual. ¿Deseas continuar?</p>',
       buttons:[{label:'Cancelar'},{label:'Regenerar',primary:true,onClick:function(){ regenerate(); }}]});
@@ -3131,6 +3171,7 @@ function moveCourse(uid, target, selectEl){
   function doIt(){
     if(target==='new') idx=addNewTerm();
     S.plan.terms[f.ti].courses.splice(f.ci,1);
+    if(!f.c.fixed) f.c.pinned=true;
     S.plan.terms[idx].courses.push(f.c);
     commitEdit();
   }
@@ -3161,6 +3202,7 @@ function openAddCourse(ti){
     }
     var t=+b.querySelector('[data-term]').value;
     var w=Core.validatePlacement(S.plan, course, t, baseDone(), prEff());
+    course.pinned=true;
     function doIt(){ S.plan.terms[t].courses.push(course); commitEdit(); }
     if(w.length){ setTimeout(function(){ confirmWarnings(w, doIt); },0); } else doIt();
   }}]});
@@ -3392,8 +3434,8 @@ var SIGNER_DEFAULT={name:'', title:'Consejero en Rehabilitación', dept:'Centro 
 /** Pregunta antes de descargar si se incluye la firma del consejero al final. */
 function askPDF(fn, opts){
   opts=opts||{};
-  var sg=Object.assign({}, SIGNER_DEFAULT, S.signer||{}), on=!!S.signOn, nMiss=opts.missing?missingCourses().length:0;
-  var body=(nMiss?'<div class="checklist" style="margin-bottom:8px"><label><input type="checkbox" data-miss'+(S.missOn===false?'':' checked')+'><span><strong>Incluir los cursos que faltan por planificar ('+nMiss+')</strong><br><span class="small muted">Lista al final con los cursos que todavía no están en ningún trimestre.</span></span></label></div>':'')+'<div class="checklist"><label><input type="checkbox" data-sg-on'+(on?' checked':'')+'><span><strong>Incluir firma del consejero al final</strong><br><span class="small muted">Añade espacio para firmar y la fecha.</span></span></label></div>'+
+  var sg=Object.assign({}, SIGNER_DEFAULT, S.signer||{}), on=!!S.signOn, nMiss=opts.missing?missingCourses().length:0, hasNotes=!!(opts.notes && S.notes && S.notes.trim());
+  var body=(hasNotes?'<div class="checklist" style="margin-bottom:8px"><label><input type="checkbox" data-notes'+(S.notesOn?' checked':'')+'><span><strong>Incluir las notas del consejero</strong><br><span class="small muted">Lo que escribiste en la pestaña Notas.</span></span></label></div>':'')+(nMiss?'<div class="checklist" style="margin-bottom:8px"><label><input type="checkbox" data-miss'+(S.missOn===false?'':' checked')+'><span><strong>Incluir los cursos que faltan por planificar ('+nMiss+')</strong><br><span class="small muted">Lista al final con los cursos que todavía no están en ningún trimestre.</span></span></label></div>':'')+'<div class="checklist"><label><input type="checkbox" data-sg-on'+(on?' checked':'')+'><span><strong>Incluir firma del consejero al final</strong><br><span class="small muted">Añade espacio para firmar y la fecha.</span></span></label></div>'+
     '<div data-sg-fields style="margin-top:12px"'+(on?'':' class="hidden"')+'>'+
     '<label class="field">Nombre del consejero (opcional)<input data-sg="name" value="'+esc(sg.name)+'" placeholder="Ej. Luis Rivera"></label>'+
     '<label class="field">Puesto<input data-sg="title" value="'+esc(sg.title)+'"></label>'+
@@ -3402,9 +3444,11 @@ function askPDF(fn, opts){
     var chk=b.querySelector('[data-sg-on]').checked, nv={};
     b.querySelectorAll('[data-sg]').forEach(function(i){ nv[i.getAttribute('data-sg')]=i.value.trim(); });
     var mb=b.querySelector('[data-miss]'); if(mb){ S.missOn=mb.checked; }
+    var nb=b.querySelector('[data-notes]'); if(nb){ S.notesOn=nb.checked; }
+    session.includeNotes=!!(nb && nb.checked);
     S.signOn=chk; S.signer=nv; save();
     session.sign=chk; session.includeMissing=!!(mb && mb.checked);
-    try{ fn(); } finally { session.sign=false; session.includeMissing=false; }
+    try{ fn(); } finally { session.sign=false; session.includeMissing=false; session.includeNotes=false; }
   }}]});
   var cb=m.body.querySelector('[data-sg-on]'), fl=m.body.querySelector('[data-sg-fields]');
   cb.addEventListener('change',function(){ fl.classList.toggle('hidden', !cb.checked); });
@@ -3547,6 +3591,12 @@ function exportPlanPDF(){
       body:S.plan.unscheduled.map(function(u){return [u.code,pdfSafe(u.name),fmtCr(u.credits),pdfSafe(u.reason)];})}));
     y=doc.lastAutoTable.finalY+10;
   }
+  if(session.includeNotes && S.notes && S.notes.trim()){
+    y+=14; if(y>660){ doc.addPage(); y=LH_TOP+10; }
+    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(28,42,57); doc.text('Notas del consejero', 54, y); y+=16;
+    doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(28,42,57);
+    S.notes.trim().split(/\r?\n/).forEach(function(par){ doc.splitTextToSize(pdfSafe(par)||' ', 612-108).forEach(function(l){ if(y>700){ doc.addPage(); y=LH_TOP+10; } doc.text(l, 54, y); y+=12.5; }); });
+  }
   pdfSignature(doc, y);
   pdfLetterhead(doc);
   saveFile(fileBase()+' - Plan.pdf', doc.output('blob'));
@@ -3667,6 +3717,7 @@ document.addEventListener('click',function(e){
   else if(a==='open-settings') openSettings();
   else if(a==='new-student'){ startNewStudent(); toast('Nuevo estudiante. El anterior quedó guardado en Estudiantes.'); }
   else if(a==='help') openHelp();
+  else if(a==='note-date'){ var ta=$('planNotes'); if(ta){ var d=new Date(), ds=('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+'/'+d.getFullYear(); var v=ta.value; ta.value=(v && !/\n$/.test(v)?v+'\n':v)+ds+': '; S.notes=ta.value; save(); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } }
   else if(a==='hist-new'){ S.histNew=true; save(); renderAll(); }
   else if(a==='hist-undo'){ S.histNew=false; save(); renderAll(); }
   else if(a==='regen') regenWithConfirm();
@@ -3678,7 +3729,7 @@ document.addEventListener('click',function(e){
   else if(a==='electives') openElectives();
   else if(a==='preps') openPreps();
   else if(a==='view-transcript') viewTranscript();
-  else if(a==='pdf-plan') askPDF(exportPlanPDF,{missing:true});
+  else if(a==='pdf-plan') askPDF(exportPlanPDF,{missing:true,notes:true});
   else if(a==='pdf-transcript') askPDF(exportTranscriptPDF);
   else if(a==='edit-course') openCourseEditor(btn.closest('tr').getAttribute('data-uid'));
   else if(a==='edit-term') openTermEditor(+btn.closest('.term').getAttribute('data-term'));
@@ -3689,6 +3740,7 @@ document.addEventListener('click',function(e){
 });
 document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeMenus(); if(e.key==='Enter' && e.target && e.target.id==='gpaEdit') e.target.blur(); });
 document.addEventListener('toggle',function(e){ if(e.target.id==='rulesBox') session.rulesOpen=e.target.open; if(e.target.id==='alertsBox') session.alertsOpen=e.target.open; if(e.target.id==='loadBox') session.loadOpen=e.target.open; if(e.target.id==='missBox') session.missOpen=e.target.open; },true);
+document.addEventListener('input',function(e){ if(e.target && e.target.id==='planNotes'){ S.notes=e.target.value; save(); } });
 document.addEventListener('change',function(e){
   var t=e.target;
   if(t.id==='stName'){ S.student.name=t.value.trim(); save(); return; }
@@ -3698,7 +3750,7 @@ document.addEventListener('change',function(e){
     if(t.id==='programSel'){ var g=groupByName(t.value); S.programBase=t.value; S.program = g ? g.def : t.value; }
     else { S.program=t.value; S.programBase=baseOf(t.value); }
     S.electiveSel={}; session.editMode=false; save();
-    if(curr() && S.plan) regenerate(true); else { S.plan=null; S.planOriginal=null; save(); renderAll(); }
+    if(curr() && S.plan) regenerate(true,{fresh:true}); else { S.plan=null; S.planOriginal=null; save(); renderAll(); }
     return;
   }
   if(t.id==='loadTerms'){ S.planTerms=Core.num(t.value); save(); renderAll(); toast(S.planTerms?'Planificando '+S.planTerms+' trimestre'+(S.planTerms>1?'s':'')+'.':'Plan completo hasta graduarse.'); return; }
