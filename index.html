@@ -400,6 +400,18 @@ details.loadbox{background:var(--paper);border:1px solid var(--line)}
 .toolbar{margin-bottom:12px}
 .empty,.wizard{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:18px 20px}
 @media (max-width:760px){ .ygrid,.ygrid.four{grid-template-columns:minmax(0,1fr)} .term.card{min-width:0} .student .facts{width:100%;justify-content:space-between;gap:12px} .student .facts dd{font-size:17px} }
+
+/* Arrastrar */
+.crow[data-uid]{cursor:grab;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.crow.dragging{opacity:.35}
+.drag-ghost{position:fixed;z-index:90;pointer-events:none;margin:0;box-shadow:0 12px 28px rgba(0,0,0,.18);transform:rotate(-1.5deg);border-color:var(--accent)!important;cursor:grabbing}
+.is-dragging,.is-dragging *{cursor:grabbing!important}
+.term.drop-on{outline:2px dashed var(--accent);outline-offset:-2px;background:var(--accent-soft)}
+.newterm-drop{display:none;margin-top:14px;padding:18px;text-align:center;border:2px dashed var(--line);border-radius:14px;color:var(--muted);font-size:14.5px}
+.is-dragging .newterm-drop{display:block}
+.newterm-drop.drop-on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.draghint{margin-left:auto}
+@media (max-width:760px){ .draghint{margin-left:0} }
 @media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -2383,7 +2395,7 @@ function openHelp(){
     sec('2. Leer el plan',[ 'Cada trimestre muestra sus cursos y créditos. Los prerrequisitos salen en <span class="pq pq-done">verde</span> si ya están aprobados, <span class="pq pq-ip">azul</span> si están en progreso y <span class="pq pq-pend">naranja</span> si faltan.',
       'En <strong>Carga</strong> cambias los créditos o clases por trimestre, el Summer y cuántos trimestres mostrar.',
       'Las <strong>alertas</strong> avisan de probatoria, cursos sin ubicar o reglas que no se cumplen. Tócalas para ver el detalle.' ])+
-    sec('3. Cambiar el plan',[ 'Toca <strong>Editar plan</strong>. En cada curso, <strong>Editar</strong> sirve para moverlo de trimestre o quitarlo.',
+    sec('3. Cambiar el plan',[ '<strong>Arrastra</strong> una clase a otro trimestre para moverla (en el celular, mantén el dedo sobre la clase un momento y luego arrastra). Si no cumple un prerrequisito sale un aviso, pero se mueve igual.', 'O toca <strong>Editar plan</strong>. En cada curso, <strong>Editar</strong> sirve para moverlo de trimestre o quitarlo.',
       'Con <strong>+ Agregar curso</strong> marcas varias clases a la vez para un trimestre; si alguna no cumple un prerrequisito sale un aviso, pero se agrega igual. Con <strong>+ Agregar trimestre</strong> añades más trimestres.',
       'Los cursos que escoges o mueves a mano quedan <strong>fijos</strong> y llevan un puntito <span class="pin-dot">•</span> junto al código. En <strong>Editar plan</strong> tocas ○/● para fijar o soltar un curso.',
       '<strong>Acomodar automáticamente</strong> deja tus cursos fijos y el sistema acomoda todo lo demás (también completa un plan en blanco).',
@@ -2445,7 +2457,7 @@ function renderPlan(){
   if(S.historyChanged) html+='<div class="notice info">El plan tiene cambios manuales y el historial o las reglas cambiaron. Los cursos aprobados y las electivas ya se actualizaron. <button class="btn link" data-action="acomodar">Acomodar automáticamente</button></div>';
   var sgMap=slotGroupMap(cur), stP=Core.buildStatus(cur,S.records,S.plannerRules);
   var nPins=collectPins().n;
-  html+='<div class="pq-legend small muted"><span><i class="ldot" style="background:var(--ok)"></i>completado</span><span><i class="ldot" style="background:var(--ip)"></i>en progreso</span><span><i class="ldot" style="background:var(--pend)"></i>pendiente</span>'+(nPins||edit?'<span><span class="pin-dot" style="margin:0 4px 0 0">•</span>curso fijo'+(edit?' (toca ○ para fijar)':'')+'</span>':'')+'</div>';
+  html+='<div class="pq-legend small muted"><span><i class="ldot" style="background:var(--ok)"></i>completado</span><span><i class="ldot" style="background:var(--ip)"></i>en progreso</span><span><i class="ldot" style="background:var(--pend)"></i>pendiente</span>'+(nPins||edit?'<span><span class="pin-dot" style="margin:0 4px 0 0">•</span>curso fijo'+(edit?' (toca ○ para fijar)':'')+'</span>':'')+'<span class="draghint">Arrastra una clase para moverla de trimestre</span></div>';
   var win=planWindow(edit);
   // Bloques por año académico: FA y WI del año Y, SP y SU del año Y+1.
   var years=[], yIdx={};
@@ -2485,6 +2497,7 @@ function renderPlan(){
     });
     html+='</div></section>';
   });
+  if(!win.limited) html+='<div class="newterm-drop">Suelta aquí para ponerla en un trimestre nuevo</div>';
   html+='</div>';
   if(win.limited) html+='<div class="notice info" style="display:block"><strong>Se muestran '+win.n+' trimestre'+(win.n>1?'s':'')+'.</strong> Después quedan '+win.rest.length+' cursos ('+fmtCr(win.restCr)+' créditos) por planificar; la graduación estimada sigue siendo '+esc(academicSummary().grad)+'. <button class="btn link" data-action="plan-all">Ver plan completo</button></div>';
   if(edit && !win.limited) html+='<button class="btn" data-action="add-term">+ Agregar trimestre</button>';
@@ -3938,6 +3951,96 @@ function newStudent(){
       var n=$('stName'); if(n) n.focus();
     }}]});
 }
+
+/* ---------------- Arrastrar clases entre trimestres ---------------- */
+var drag=null;
+function dragCleanup(){
+  if(!drag) return;
+  clearTimeout(drag.timer);
+  if(drag.ghost) drag.ghost.remove();
+  if(drag.row) drag.row.classList.remove('dragging');
+  document.querySelectorAll('.drop-on').forEach(function(x){ x.classList.remove('drop-on'); });
+  document.body.classList.remove('is-dragging');
+  drag=null;
+}
+function dragStart(x,y){
+  if(!drag) return;
+  drag.started=true;
+  var r=drag.row.getBoundingClientRect();
+  var g=drag.row.cloneNode(true); g.classList.add('drag-ghost'); g.style.width=r.width+'px';
+  drag.dx=x-r.left; drag.dy=y-r.top;
+  document.body.appendChild(g); drag.ghost=g;
+  drag.row.classList.add('dragging'); document.body.classList.add('is-dragging');
+  if(navigator.vibrate) try{ navigator.vibrate(12); }catch(e){}
+  dragMoveTo(x,y);
+}
+function dragTargetAt(x,y){
+  var el=document.elementFromPoint(x,y); if(!el) return null;
+  return el.closest('.term[data-term]') || el.closest('.newterm-drop');
+}
+function dragMoveTo(x,y){
+  if(!drag || !drag.ghost) return;
+  drag.ghost.style.left=(x-drag.dx)+'px'; drag.ghost.style.top=(y-drag.dy)+'px';
+  var tgt=dragTargetAt(x,y);
+  document.querySelectorAll('.drop-on').forEach(function(z){ if(z!==tgt) z.classList.remove('drop-on'); });
+  if(tgt) tgt.classList.add('drop-on');
+  drag.target=tgt;
+  if(y<70) window.scrollBy(0,-14); else if(y>window.innerHeight-70) window.scrollBy(0,14);
+}
+/** Mueve una clase arrastrada. Nunca bloquea: los avisos salen en un aviso breve. */
+function dragDrop(uid, target){
+  var f=findCourse(uid); if(!f) return;
+  if(f.c.fixed){ toast(f.c.code+' está en progreso (IP) y se queda en su trimestre.'); return; }
+  var idx = target==='new' ? S.plan.terms.length : +target;
+  if(idx===f.ti) return;
+  var probe=clone(S.plan);
+  if(target==='new'){ var last=probe.terms[probe.terms.length-1]; var nt=Core.Terms.next(last,S.plannerRules.includeSummer); probe.terms.push({season:nt.season,year:nt.year,label:Core.Terms.label(nt),courses:[]}); }
+  probe.terms[f.ti].courses.splice(f.ci,1);
+  var w=Core.validatePlacement(probe, f.c, idx, baseDone(), prEff());
+  if(target==='new') idx=addNewTerm();
+  S.plan.terms[f.ti].courses.splice(f.ci,1);
+  f.c.pinned=true;
+  S.plan.terms[idx].courses.push(f.c);
+  var lbl=tS(S.plan.terms[idx].label);
+  var extras=coreqSuggestions(f.c, idx);
+  commitEdit();
+  if(w.length){
+    warnPop([f.c.code+' → '+lbl+':'].concat(w.map(function(x){ return x.replace(/^Este curso /,'El curso '); })),
+      extras.map(function(x){ return {label:'Incluir '+x.code, fn:function(){ includeCourse(x.code, idx); commitEdit(); toast(x.code+' también quedó en '+lbl+'.'); }}; }));
+  } else toast(f.c.code+' movido a '+lbl+'.');
+}
+document.addEventListener('pointerdown',function(e){
+  if(session.tab!=='plan' || (e.button!=null && e.button>0)) return;
+  var row=e.target.closest('.crow[data-uid]'); if(!row) return;
+  if(e.target.closest('button,a,select,input,textarea')) return;
+  dragCleanup();
+  drag={uid:row.getAttribute('data-uid'), row:row, x0:e.clientX, y0:e.clientY, started:false, touch:e.pointerType!=='mouse', lx:e.clientX, ly:e.clientY};
+  if(drag.touch) drag.timer=setTimeout(function(){ if(drag && !drag.started) dragStart(drag.lx, drag.ly); }, 300);
+});
+document.addEventListener('pointermove',function(e){
+  if(!drag) return;
+  drag.lx=e.clientX; drag.ly=e.clientY;
+  var moved=Math.abs(e.clientX-drag.x0)+Math.abs(e.clientY-drag.y0);
+  if(!drag.started){
+    if(drag.touch){ if(moved>12) dragCleanup(); }   // se está desplazando la página
+    else if(moved>6) dragStart(e.clientX,e.clientY);
+    return;
+  }
+  e.preventDefault(); dragMoveTo(e.clientX,e.clientY);
+});
+document.addEventListener('touchmove',function(e){ if(drag && drag.started) e.preventDefault(); },{passive:false});
+document.addEventListener('pointerup',function(e){
+  if(!drag) return;
+  var d=drag;
+  if(d.started){
+    var tgt=dragTargetAt(e.clientX,e.clientY)||d.target, uid=d.uid;
+    dragCleanup();
+    if(tgt){ var to=tgt.classList.contains('newterm-drop')?'new':tgt.getAttribute('data-term'); setTimeout(function(){ dragDrop(uid, to); },0); }
+    e.preventDefault();
+  } else dragCleanup();
+});
+document.addEventListener('pointercancel',function(){ dragCleanup(); });
+document.addEventListener('keydown',function(e){ if(e.key==='Escape' && drag) dragCleanup(); });
 
 /* ---------------- Eventos ---------------- */
 function closeMenus(except){ document.querySelectorAll('.menu.open').forEach(function(m){ if(m!==except){ m.classList.remove('open'); var b=m.querySelector('[aria-expanded]'); if(b) b.setAttribute('aria-expanded','false'); } }); }
