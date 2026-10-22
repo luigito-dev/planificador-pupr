@@ -238,6 +238,9 @@ details.alerts ul{margin:8px 0 0;padding-left:18px;font-size:14px}
 details.alerts li{margin:3px 0}
 .al-bad::marker{color:var(--danger)} .al-warn::marker{color:var(--warn)}
 /* Lista de estudiantes */
+.stfilters{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:8px}
+.stfilters input,.stfilters select{width:100%;min-width:0}
+@media (max-width:680px){ .stfilters{grid-template-columns:1fr} }
 .strow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
 .stinfo{min-width:0}
 /* Vista del currículo como hoja */
@@ -1576,24 +1579,58 @@ function importBackup(){
   };
   input.click();
 }
+/** Resumen de un estudiante guardado: probatoria, graduación estimada y trimestres que le faltan. */
+function rosterInfo(s){
+  var recs=s.records||[], level='ok';
+  if(recs.length){
+    var cur=s.program?curriculumFor(s.program):null;
+    var gpa=s.gpaOverride!=null?s.gpaOverride:Core.computeGPA(recs, S.gpaRules, prepTypeOf(cur)).gpa;
+    var pr=S.plannerRules, minG=Core.num(pr.minGPA!=null?pr.minGPA:2), warnG=Core.num(pr.gpaWarn!=null?pr.gpaWarn:2.1);
+    if(gpa!=null){ var gr=Math.round(gpa*1000)/1000; if(gr<minG) level='bad'; else if(gr<=warnG) level='warn'; }
+    var cr=(s.officialTotals&&s.officialTotals.attempted>0)?{attempted:s.officialTotals.attempted,passed:s.officialTotals.passed}:Core.completionRate(recs);
+    if(cr.attempted>0){ var rate=cr.passed/cr.attempted*100, minR=Core.num(pr.minRate!=null?pr.minRate:66), warnR=Core.num(pr.rateWarn!=null?pr.rateWarn:70);
+      if(rate<minR) level='bad'; else if(rate<warnR && level!=='bad') level='warn'; }
+  }
+  var ne=(s.plan&&s.plan.terms||[]).filter(function(t){ return t.courses.length; });
+  var left=ne.filter(function(t){ return !t.courses.every(function(c){ return c.grade==='IP' || c.fixed; }); }).length;
+  return {level:level, gpa:gpa, grad:ne.length?tS(ne[ne.length-1].label):'', left:ne.length?left:null};
+}
 function openStudents(){
   save();
   var ids=Object.keys(S.roster||{}).sort(function(a,b){ return (S.roster[b].updated||0)-(S.roster[a].updated||0); });
+  var info={}; ids.forEach(function(id){ info[id]=rosterInfo(S.roster[id]); });
+  var progs=[]; ids.forEach(function(id){ var s=S.roster[id], p=s.program||s.programBase||''; if(p && progs.indexOf(p)<0) progs.push(p); }); progs.sort();
   function row(id){
-    var s=S.roster[id], nm=(s.student&&s.student.name)||'Estudiante sin nombre';
-    var prog=s.program||s.programBase||'Sin programa'; var d=new Date(s.updated||0);
+    var s=S.roster[id], nm=(s.student&&s.student.name)||'Estudiante sin nombre', inf=info[id];
+    var prog=s.program||s.programBase||''; var d=new Date(s.updated||0);
     var ds=('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+'/'+d.getFullYear();
-    return '<div class="strow" data-id="'+esc(id)+'" data-q="'+esc((nm+' '+prog+' '+((s.student&&s.student.id)||'')).toLowerCase())+'"><div class="stinfo"><strong>'+esc(nm)+'</strong>'+(id===S.currentId?' <span class="tag">abierto</span>':'')+
-      '<br><span class="small muted">'+(s.student&&s.student.id?'Núm. '+esc(s.student.id)+' · ':'')+esc(prog)+' · '+(s.records?s.records.length:0)+' cursos · '+ds+'</span></div>'+
+    var badge=inf.level==='bad'?'<span class="probadge bad" style="margin:0 0 0 6px;font-size:11.5px;padding:1px 8px">Probatoria</span>':inf.level==='warn'?'<span class="probadge warn" style="margin:0 0 0 6px;font-size:11.5px;padding:1px 8px">Cerca de probatoria</span>':'';
+    return '<div class="strow" data-id="'+esc(id)+'" data-prog="'+esc(prog)+'" data-lvl="'+inf.level+'" data-left="'+(inf.left==null?'':inf.left)+'" data-q="'+esc((nm+' '+prog+' '+((s.student&&s.student.id)||'')).toLowerCase())+'"><div class="stinfo"><strong>'+esc(nm)+'</strong>'+badge+(id===S.currentId?' <span class="tag">abierto</span>':'')+
+      '<br><span class="small muted">'+(s.student&&s.student.id?'Núm. '+esc(s.student.id)+' · ':'')+esc(prog?programName(prog):'Sin programa')+(inf.grad?' · Graduación '+esc(inf.grad):'')+' · '+ds+'</span></div>'+
       '<div class="row">'+(id===S.currentId?'':'<button class="btn sm primary" data-st="open">Abrir</button>')+'<button class="btn sm danger" data-st="del">Eliminar</button></div></div>';
   }
-  var body='<p class="small muted" style="margin-top:0">Los estudiantes se guardan solos en este navegador. Usa <strong>Exportar respaldo</strong> para guardarlos en un archivo y <strong>Importar respaldo</strong> para pasarlos a otra computadora o a otra versión de la app.</p>'+
-    '<div class="row" style="margin-bottom:10px"><button class="btn sm" data-bk="export">Exportar respaldo</button><button class="btn sm" data-bk="import">Importar respaldo</button></div>'+
-    (ids.length>5?'<input data-q placeholder="Buscar por nombre, número o programa" style="width:100%;margin-bottom:10px">':'')+
+  var body='<p class="small muted" style="margin-top:0">Los estudiantes se guardan solos en este navegador. Usa <strong>Exportar respaldo</strong> para guardarlos en un archivo (guárdalo en tu OneDrive de PUPR) e <strong>Importar respaldo</strong> para pasarlos a otra computadora.</p>'+
+    '<div class="row" style="margin-bottom:12px"><button class="btn sm" data-bk="export">Exportar respaldo</button><button class="btn sm" data-bk="import">Importar respaldo</button></div>'+
+    (ids.length?'<div class="stfilters"><input data-q placeholder="Buscar por nombre o número">'+
+      '<select data-fp><option value="">Todos los programas</option>'+progs.map(function(p){ return '<option value="'+esc(p)+'">'+esc(programName(p))+'</option>'; }).join('')+'</select>'+
+      '<select data-fl><option value="">Todos</option><option value="prob">En probatoria o cerca</option><option value="bad">Solo en probatoria</option><option value="grad">Se gradúan en 1 año o menos</option><option value="grad2">Se gradúan en 2 años o menos</option><option value="noplan">Sin plan</option></select></div>'+
+      '<p class="small muted" data-count style="margin:4px 0 8px"></p>':'')+
     '<div class="stlist">'+(ids.length?ids.map(row).join(''):'<p class="muted">Aún no hay estudiantes guardados. Escribe el nombre del estudiante y quedará en esta lista.</p>')+'</div>';
   var m=modal({title:'Estudiantes', body:body, buttons:[{label:'Borrar información…', danger:true, left:true, onClick:function(){ setTimeout(clearAll,0); }},{label:'Nuevo estudiante', onClick:function(){ setTimeout(startNewStudent,0); }},{label:'Cerrar',primary:true}]});
-  var q=m.body.querySelector('[data-q]');
-  if(q) q.addEventListener('input',function(){ var v=q.value.toLowerCase(); m.body.querySelectorAll('.strow').forEach(function(r){ r.classList.toggle('hidden', r.getAttribute('data-q').indexOf(v)<0); }); });
+  var q=m.body.querySelector('[data-q]'), fp=m.body.querySelector('[data-fp]'), fl=m.body.querySelector('[data-fl]'), cnt=m.body.querySelector('[data-count]');
+  var yearTerms=S.plannerRules.includeSummer?4:3;
+  function apply(){
+    if(!q) return;
+    var v=q.value.toLowerCase().trim(), p=fp.value, l=fl.value, n=0;
+    m.body.querySelectorAll('.strow').forEach(function(r){
+      var lvl=r.getAttribute('data-lvl'), left=r.getAttribute('data-left');
+      var ok=(!v || r.getAttribute('data-q').indexOf(v)>=0) && (!p || r.getAttribute('data-prog')===p) &&
+        (!l || (l==='prob' && lvl!=='ok') || (l==='bad' && lvl==='bad') || (l==='grad' && left!=='' && +left<=yearTerms) || (l==='grad2' && left!=='' && +left<=2*yearTerms) || (l==='noplan' && left===''));
+      r.classList.toggle('hidden', !ok); if(ok) n++;
+    });
+    cnt.textContent=n+' de '+ids.length+' estudiante'+(ids.length>1?'s':'');
+  }
+  if(q){ q.addEventListener('input',apply); fp.addEventListener('change',apply); fl.addEventListener('change',apply); apply(); }
   m.body.addEventListener('click',function(e){
     var bk=e.target.closest('[data-bk]');
     if(bk){
@@ -2300,8 +2337,8 @@ function renderStudent(){
   var total=a.prog.done+a.prog.ip+a.prog.pend;
   var pct=function(x){ return total? (x/total*100) : 0; };
   var trInfo = S.records.length
-    ? '<span>Transcript: '+S.records.length+' cursos</span>'
-    : (S.plan ? '<span>Sin historial <button class="btn link" data-action="open-transcript">Cargar archivo</button>'+(cur?' o <button class="btn link" data-action="open-audit">marcar cursos a mano</button>':'')+'</span>' : '');
+    ? '<span>Historial: '+S.records.length+' cursos <button class="btn sm" data-action="open-transcript">Cambiar transcript</button></span>'
+    : (S.plan ? '<span>Sin historial <button class="btn sm primary" data-action="open-transcript">Subir transcript</button>'+(cur?' o <button class="btn link" data-action="open-audit">marcar cursos a mano</button>':'')+'</span>' : '');
   $('student').innerHTML =
     '<div class="stu-top"><div class="stu-who">'+
     '<label class="hidden" for="stName">Nombre del estudiante</label>'+
@@ -2403,7 +2440,7 @@ function openHelp(){
     sec('4. Más opciones',[ '<strong>Terminar antes</strong>: compara cuánto se acorta el plan con más créditos o con Summer.',
       '<strong>Comparar con otro programa</strong>: qué pasaría si el estudiante se cambia de programa.',
       '<strong>Preparatorios que aplican</strong>: marca los preparatorios que el estudiante no necesita.' ])+
-    sec('5. Descargar y guardar',[ '<strong>Descargar PDF</strong> crea el plan, la hoja del currículo o el transcript con el membrete. Puedes incluir tu firma.',
+    sec('5. Descargar y guardar',[ '<strong>Enviar por correo</strong> prepara un resumen del plan para copiar o abrir en tu correo.', '<strong>Descargar PDF</strong> crea el plan, la hoja del currículo o el transcript con el membrete. Puedes incluir tu firma.',
       'En la pestaña <strong>Notas</strong> escribes lo hablado con el estudiante; puedes incluirlo en el PDF del plan.',
       'Los estudiantes se guardan solos <strong>en este navegador</strong>. En <strong>Estudiantes → Exportar respaldo</strong> guardas una copia; guárdala en tu OneDrive de PUPR.' ])+
     sec('6. GPA',[ 'Se calcula con la regla de PUPR. Si el oficial es distinto, toca el GPA para escribirlo; <strong>restaurar</strong> vuelve al calculado.' ]);
@@ -2436,9 +2473,13 @@ function renderPlan(){
         '<button role="menuitem" data-action="pdf-audit">Hoja del currículo</button>'+
         '<button role="menuitem" data-action="pdf-transcript">Transcript</button>'+
       '</div></div>'+
+      '<button class="btn" data-action="email-plan">Enviar por correo</button>'+
       ((S.planEdited || S.planBeforeFill || (S.prevLoad && LOAD_KEYS.some(function(k){ return S.prevLoad[k]!==S.plannerRules[k]; })) || canUndoProgram())?'<button class="btn" data-action="restore">Restaurar</button>':'')+
       '<span class="spacer"></span>'+
       '<div class="menu"><button class="btn ghost" data-action="menu" aria-haspopup="true" aria-expanded="false">Más ▾</button><div class="menu-list" role="menu">'+
+        '<button role="menuitem" data-action="open-transcript">'+(S.records.length?'Cambiar el transcript':'Subir transcript o Degree Audit')+'</button>'+
+        '<button role="menuitem" data-action="open-audit">Marcar cursos a mano</button>'+
+        '<hr>'+
         '<button role="menuitem" data-action="fastest">Terminar antes</button>'+
         '<button role="menuitem" data-action="compare">Comparar con otro programa</button>'+
         (hasPrep?'<button role="menuitem" data-action="preps">Preparatorios que aplican</button>':'')+
@@ -2505,6 +2546,51 @@ function renderPlan(){
   el.innerHTML=html;
 }
 
+/* ---------------- Resumen del plan para enviar por correo ---------------- */
+function planSummaryText(){
+  var a=academicSummary(), win=planWindow(false), sg=Object.assign({}, SIGNER_DEFAULT, S.signer||{});
+  var first=(S.student.name||'').trim().split(/\s+/)[0]||'';
+  var L=[];
+  L.push('Saludos'+(first?' '+first:'')+':','');
+  L.push('Te comparto el resumen de tu plan académico en '+programName(S.program)+'.','');
+  L.push('GPA: '+fmt(a.gpa)+'   |   Créditos aprobados: '+fmtCr(a.earned)+'   |   Créditos pendientes: '+(a.pending==null?'—':fmtCr(a.pending)));
+  L.push('Graduación estimada: '+String(a.grad).replace(' *',''),'');
+  L.push('PLAN POR TRIMESTRE');
+  win.idx.forEach(function(ti){
+    var t=S.plan.terms[ti]; if(!t.courses.length) return;
+    var ipT=t.courses.every(function(c){ return c.grade==='IP' || c.fixed; });
+    L.push('', tS(t.label)+' ('+fmtCr(Core.termCredits(t))+' créditos)'+(ipT?' - en curso':''));
+    t.courses.forEach(function(c){ L.push('  • '+c.code+'  '+(c.name||'')+' ('+fmtCr(c.credits)+' cr)'+(c.placeholder?' - por escoger':'')); });
+  });
+  if(win.limited) L.push('', 'Después de estos trimestres quedan '+win.rest.length+' cursos ('+fmtCr(win.restCr)+' créditos) por planificar.');
+  var miss=missingCourses(); if(miss.length) L.push('', 'Cursos que aún faltan por planificar: '+miss.map(function(c){ return c.code; }).join(', ')+'.');
+  L.push('', 'Este plan es una guía y puede cambiar según la oferta de cursos y tu progreso académico. Si tienes preguntas, comunícate conmigo.', '');
+  if(sg.name) L.push(sg.name);
+  if(sg.title) L.push(sg.title);
+  if(sg.dept) L.push(sg.dept);
+  L.push('Universidad Politécnica de Puerto Rico');
+  return L.join('\n');
+}
+function openEmailSummary(){
+  if(!S.plan){ toast('Genera el plan primero.'); return; }
+  var subj='Plan académico'+(S.student.name?' - '+S.student.name:'');
+  var body='<p class="small muted" style="margin-top:0">Revisa o cambia el texto y luego cópialo o ábrelo en tu correo. Envíalo al <strong>correo institucional</strong> del estudiante.</p>'+
+    '<div class="grid2"><label class="field">Correo del estudiante<input data-em type="email" value="'+esc(S.student.email||'')+'" placeholder="Correo institucional del estudiante"></label>'+
+    '<label class="field">Asunto<input data-sj value="'+esc(subj)+'"></label></div>'+
+    '<label class="field">Mensaje<textarea data-tx rows="16" style="font-family:inherit;font-size:14px;line-height:1.45">'+esc(planSummaryText())+'</textarea></label>';
+  var m=modal({title:'Enviar el plan por correo', wide:true, body:body, buttons:[
+    {label:'Cerrar', left:true},
+    {label:'Copiar texto', onClick:function(b){ var tx=b.querySelector('[data-tx]').value;
+      (navigator.clipboard&&navigator.clipboard.writeText?navigator.clipboard.writeText(tx):Promise.reject()).then(function(){ toast('Texto copiado. Pégalo en tu correo.'); },function(){ var ta=b.querySelector('[data-tx]'); ta.select(); try{ document.execCommand('copy'); toast('Texto copiado. Pégalo en tu correo.'); }catch(e){ toast('Selecciona el texto y cópialo.'); } });
+      return false; }},
+    {label:'Abrir en el correo', primary:true, onClick:function(b){
+      var em=b.querySelector('[data-em]').value.trim(); S.student.email=em; save();
+      var url='mailto:'+encodeURIComponent(em)+'?subject='+encodeURIComponent(b.querySelector('[data-sj]').value)+'&body='+encodeURIComponent(b.querySelector('[data-tx]').value);
+      if(url.length>1900) toast('El mensaje es largo; si el correo no lo abre completo, usa "Copiar texto".');
+      window.location.href=url; return false; }}
+  ]});
+  m.body.querySelector('[data-em]').addEventListener('change',function(e){ S.student.email=e.target.value.trim(); save(); });
+}
 /* ---------------- Notas del consejero ---------------- */
 function renderNotes(){
   $('panel').innerHTML='<p class="small muted" style="margin-top:0">Notas de las reuniones con '+(S.student.name?esc(S.student.name):'este estudiante')+'. Se guardan solas con el estudiante y puedes incluirlas en el PDF del plan.</p>'+
@@ -4068,6 +4154,7 @@ document.addEventListener('click',function(e){
   else if(a==='open-settings') openSettings();
   else if(a==='new-student'){ startNewStudent(); toast('Nuevo estudiante. El anterior quedó guardado en Estudiantes.'); }
   else if(a==='help') openHelp();
+  else if(a==='email-plan') openEmailSummary();
   else if(a==='note-date'){ var ta=$('planNotes'); if(ta){ var d=new Date(), ds=('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+'/'+d.getFullYear(); var v=ta.value; ta.value=(v && !/\n$/.test(v)?v+'\n':v)+ds+': '; S.notes=ta.value; save(); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } }
   else if(a==='hist-new'){ S.histNew=true; save(); renderAll(); }
   else if(a==='hist-undo'){ S.histNew=false; save(); renderAll(); }
