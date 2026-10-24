@@ -1540,12 +1540,14 @@ function blankStudentFields(){
   S.plan=null; S.planOriginal=null; S.planEdited=false; S.historyChanged=false; S.electiveSel={}; S.prepExempt={};
 }
 function startNewStudent(){
+  session.deletedPlan=null;
   save(); S.currentId=Core.uid(); blankStudentFields(); S.program=''; S.programBase='';
   session.pdfData=null; session.editMode=false; session.tab='plan'; save();
   renderAll();
   var n=$('stName'); if(n) n.focus();
 }
 function loadStudent(id){
+  session.deletedPlan=null;
   var snap=S.roster[id]; if(!snap) return;
   save();
   var d=defaultState();
@@ -2436,7 +2438,7 @@ function openHelp(){
       'Con <strong>+ Agregar curso</strong> marcas varias clases a la vez para un trimestre; si alguna no cumple un prerrequisito sale un aviso, pero se agrega igual. Con <strong>+ Agregar trimestre</strong> añades más trimestres.',
       'Los cursos que escoges o mueves a mano quedan <strong>fijos</strong> y llevan un puntito <span class="pin-dot">•</span> junto al código. En <strong>Editar plan</strong> tocas ○/● para fijar o soltar un curso.',
       '<strong>Acomodar automáticamente</strong> deja tus cursos fijos y el sistema acomoda todo lo demás (también completa un plan en blanco).',
-      'Si algo no te gusta, <strong>Restaurar</strong> lo deshace.' ])+
+      'Si algo no te gusta, <strong>Restaurar</strong> lo deshace. <strong>Borrar</strong> quita el plan (se puede deshacer) o todo lo del estudiante.' ])+
     sec('4. Más opciones',[ '<strong>Terminar antes</strong>: compara cuánto se acorta el plan con más créditos o con Summer.',
       '<strong>Comparar con otro programa</strong>: qué pasaría si el estudiante se cambia de programa.',
       '<strong>Preparatorios que aplican</strong>: marca los preparatorios que el estudiante no necesita.' ])+
@@ -2450,7 +2452,7 @@ function openHelp(){
 function renderPlan(){
   var cur=curr(), el=$('panel'), pr=prEff();
   if(!cur || !S.plan){
-    el.innerHTML=(S.wizardSeen && !session.showWizard)?quickStartHTML():wizardHTML();
+    el.innerHTML=(session.deletedPlan?'<div class="notice info"><span>Se borró el plan.</span><button class="btn sm" data-action="undo-delete-plan">Deshacer</button></div>':'')+((S.wizardSeen && !session.showWizard)?quickStartHTML():wizardHTML());
     return;
   }
   var edit=session.editMode;
@@ -2476,6 +2478,7 @@ function renderPlan(){
       '<button class="btn" data-action="email-plan">Enviar por correo</button>'+
       ((S.planEdited || S.planBeforeFill || (S.prevLoad && LOAD_KEYS.some(function(k){ return S.prevLoad[k]!==S.plannerRules[k]; })) || canUndoProgram())?'<button class="btn" data-action="restore">Restaurar</button>':'')+
       '<span class="spacer"></span>'+
+      '<button class="btn ghost danger" data-action="delete-plan" title="Borrar el plan o todo lo del estudiante">Borrar</button>'+
       '<div class="menu"><button class="btn ghost" data-action="menu" aria-haspopup="true" aria-expanded="false">Más ▾</button><div class="menu-list" role="menu">'+
         '<button role="menuitem" data-action="open-transcript">'+(S.records.length?'Cambiar el transcript':'Subir transcript o Degree Audit')+'</button>'+
         '<button role="menuitem" data-action="open-audit">Marcar cursos a mano</button>'+
@@ -2734,7 +2737,7 @@ function regenerate(silent, opts){
   var plan, pk=opts.fresh?{pins:{},n:0}:collectPins();
   try{ plan=Core.generatePlan(cur, S.records, S.electiveSel, prEff(), exemptList(), pk.pins); }
   catch(err){ showError('No se pudo generar el plan', err); return; }
-  S.plan=plan; S.planOriginal=clone(plan); S.planEdited=false; S.historyChanged=false; S.planBeforeFill=null; S.wizardSeen=true; session.showWizard=false;
+  S.plan=plan; S.planOriginal=clone(plan); S.planEdited=false; S.historyChanged=false; S.planBeforeFill=null; S.wizardSeen=true; session.showWizard=false; session.deletedPlan=null;
   save(); renderAll();
   if(!silent) toast('Plan generado: '+plan.terms.filter(function(x){return x.courses.length;}).length+' trimestres'+(pk.n?', con tus '+pk.n+' cursos fijos en su lugar.':'.'));
 }
@@ -2753,6 +2756,7 @@ function startBlankPlan(){
     var start=terms.length ? Core.Terms.next(terms[0], pr.includeSummer) : {season:pr.startSeason, year:+pr.startYear};
     terms.push({season:start.season, year:start.year, label:Core.Terms.label(start), courses:[]});
     S.planBeforeFill=null;
+    session.deletedPlan=null;
     S.plan={terms:terms, unscheduled:[], blank:true}; S.planOriginal=null; S.planEdited=true; S.historyChanged=false; S.wizardSeen=true; session.showWizard=false;
     session.editMode=true; save(); renderAll();
     toast('Plan en blanco listo. Agrega clases y trimestres; cuando quieras, pulsa "Acomodar automáticamente".');
@@ -4026,6 +4030,29 @@ function clearAll(){
     }}]});
 }
 
+/** Borrar desde la vista del plan: solo el plan (se puede deshacer) o todo lo del estudiante. */
+function openDeletePlan(){
+  var nm=S.student.name||'este estudiante';
+  modal({title:'Borrar', narrow:true,
+    body:'<div class="checklist"><label><input type="radio" name="dp" value="plan" checked><span><strong>Solo el plan</strong><br><span class="small muted">Se quitan todos los trimestres. Se quedan el historial, el GPA y las notas. Puedes deshacerlo enseguida.</span></span></label>'+
+      '<label><input type="radio" name="dp" value="student"><span><strong>Todo lo de '+esc(nm)+'</strong><br><span class="small muted">Plan, historial, notas y datos. También sale de la lista de estudiantes. No se puede deshacer.</span></span></label></div>',
+    buttons:[{label:'Cancelar'},{label:'Borrar',primary:true,danger:true,onClick:function(b){
+      var v=b.querySelector('input[name=dp]:checked').value;
+      if(v==='plan'){
+        session.deletedPlan={plan:clone(S.plan), planOriginal:S.planOriginal?clone(S.planOriginal):null, planEdited:S.planEdited, planBeforeFill:S.planBeforeFill?clone(S.planBeforeFill):null};
+        S.plan=null; S.planOriginal=null; S.planEdited=false; S.historyChanged=false; S.planBeforeFill=null;
+        session.editMode=false; save(); renderAll(); toast('Plan borrado.');
+      } else {
+        if(S.roster) delete S.roster[S.currentId]; S.currentId=Core.uid(); blankStudentFields(); S.program=''; S.programBase='';
+        session.pdfData=null; session.editMode=false; session.tab='plan'; session.deletedPlan=null; save(); renderAll(); toast('Se borró todo lo del estudiante.');
+      }
+    }}]});
+}
+function undoDeletePlan(){
+  var d=session.deletedPlan; if(!d) return;
+  S.plan=d.plan; S.planOriginal=d.planOriginal; S.planEdited=!!d.planEdited; S.planBeforeFill=d.planBeforeFill; session.deletedPlan=null;
+  save(); renderAll(); toast('Plan recuperado.');
+}
 /* ---------------- Nuevo estudiante ---------------- */
 function newStudent(){
   modal({title:'Nuevo estudiante', narrow:true, body:'<p style="margin-top:0">Se borrarán el nombre, el transcript, el plan y las selecciones del estudiante actual. Se conservan los currículos y los ajustes.</p>',
@@ -4154,6 +4181,8 @@ document.addEventListener('click',function(e){
   else if(a==='open-settings') openSettings();
   else if(a==='new-student'){ startNewStudent(); toast('Nuevo estudiante. El anterior quedó guardado en Estudiantes.'); }
   else if(a==='help') openHelp();
+  else if(a==='delete-plan') openDeletePlan();
+  else if(a==='undo-delete-plan') undoDeletePlan();
   else if(a==='email-plan') openEmailSummary();
   else if(a==='note-date'){ var ta=$('planNotes'); if(ta){ var d=new Date(), ds=('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+'/'+d.getFullYear(); var v=ta.value; ta.value=(v && !/\n$/.test(v)?v+'\n':v)+ds+': '; S.notes=ta.value; save(); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } }
   else if(a==='hist-new'){ S.histNew=true; save(); renderAll(); }
