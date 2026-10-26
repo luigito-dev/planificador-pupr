@@ -50,6 +50,7 @@ header.top .btn.ghost:hover{background:rgba(255,255,255,.14)}
 .btn.link{border:none;background:none;color:var(--accent);padding:2px 4px}
 .btn.link:hover{text-decoration:underline;background:none}
 .btn.danger{color:var(--danger)}
+.btn.primary.danger{background:var(--danger);border-color:var(--danger);color:#fff}
 .btn.sm{font-size:13px;padding:5px 10px}
 .btn[disabled]{opacity:.45;cursor:not-allowed}
 .btn:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible,summary:focus-visible,[role=tab]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
@@ -376,6 +377,7 @@ header.top .help{border-color:rgba(255,255,255,.55)}
 .term.card .term-head{padding-bottom:8px;flex-wrap:wrap}
 .term.card .term-head h4{margin:0;font-size:15.5px}
 .term.card .tcr{font-size:13.5px}
+.deltrm{color:var(--danger)!important;margin-left:4px}
 .crow{border:1px solid var(--line);border-radius:10px;padding:7px 9px;margin-bottom:6px;background:var(--paper)}
 .crow.ip{border-left:3px solid var(--ip)}
 .editing .crow{border-style:dashed}
@@ -2015,7 +2017,7 @@ function openRestore(){
     (canPlan?'<label><input type="radio" name="rst" value="plan" checked><span><strong>Deshacer los cambios manuales</strong><br><span class="small muted">Vuelve al plan como lo generó la app, sin lo que moviste, agregaste o eliminaste.</span></span></label>':'')+
     (canLoad?'<label><input type="radio" name="rst" value="load"'+(canPlan?'':' checked')+'><span><strong>Volver a la carga anterior</strong><br><span class="small muted">De '+esc(loadDesc(S.plannerRules))+' a '+esc(loadDesc(S.prevLoad))+', y regenerar el plan.</span></span></label>':'')+
     (canProg?'<label><input type="radio" name="rst" value="prog"'+(canPlan||canLoad?'':' checked')+'><span><strong>Volver al programa anterior</strong><br><span class="small muted">De '+esc(programName(S.program))+' a '+esc(programName(S.prevProgram.program))+', con el plan que tenía.</span></span></label>':'')+
-    (canFill?'<label><input type="radio" name="rst" value="fill"'+(canPlan||canLoad||canProg?'':' checked')+'><span><strong>Volver al plan anterior</strong><br><span class="small muted">Deshace lo último que hizo el sistema al completar o reorganizar.</span></span></label>':'')+
+    (canFill?'<label><input type="radio" name="rst" value="fill"'+(canPlan||canLoad||canProg?'':' checked')+'><span><strong>Volver al plan anterior</strong><br><span class="small muted">Deshace el último cambio grande: acomodar, completar o eliminar un trimestre.</span></span></label>':'')+
     '</div>';
   modal({title:'Restaurar', narrow:true, body:body, buttons:[{label:'Cancelar'},{label:'Restaurar',primary:true,onClick:function(b){
     var v=(b.querySelector('input[name=rst]:checked')||{}).value;
@@ -2441,7 +2443,7 @@ function openHelp(){
       'Con <strong>+ Agregar curso</strong> marcas varias clases a la vez para un trimestre; si alguna no cumple un prerrequisito sale un aviso, pero se agrega igual. Con <strong>+ Agregar trimestre</strong> añades más trimestres.',
       'Los cursos que escoges o mueves a mano quedan <strong>fijos</strong> y llevan un puntito <span class="pin-dot">•</span> junto al código. En <strong>Editar plan</strong> tocas ○/● para fijar o soltar un curso.',
       '<strong>Acomodar automáticamente</strong> deja tus cursos fijos y el sistema acomoda todo lo demás (también completa un plan en blanco).',
-      'Si algo no te gusta, <strong>Restaurar</strong> lo deshace. <strong>Borrar</strong> quita el plan (se puede deshacer) o todo lo del estudiante.' ])+
+      'Si algo no te gusta, <strong>Restaurar</strong> lo deshace. <strong>Borrar</strong> quita el plan (se puede deshacer) o todo lo del estudiante. En <strong>Editar plan</strong>, <strong>Eliminar</strong> junto a un trimestre lo quita completo.' ])+
     sec('4. Más opciones',[ '<strong>Terminar antes</strong>: compara cuánto se acorta el plan con más créditos o con Summer.',
       '<strong>Comparar con otro programa</strong>: qué pasaría si el estudiante se cambia de programa.',
       '<strong>Preparatorios que aplican</strong>: marca los preparatorios que el estudiante no necesita.' ])+
@@ -2524,7 +2526,7 @@ function renderPlan(){
       if(cr>cap) flag='<span class="flag bad">Excede '+cap+'</span>';
       else if(cr<pr.minCredits && t.courses.length && ti<S.plan.terms.length-1) flag='<span class="flag">Menos de '+pr.minCredits+'</span>';
       var lim=(function(){ var o=(S.termLimits||{})[Core.Terms.label({season:t.season,year:t.year})]; return o&&(o.credits||o.courses)?'<span class="tag">límite: '+(o.credits?o.credits+' cr':'')+(o.credits&&o.courses?' · ':'')+(o.courses?o.courses+' clases':'')+'</span>':''; })();
-      html+='<div class="term card" data-term="'+ti+'"><div class="term-head"><h4>'+esc(tS(t.label))+'</h4>'+lim+(edit?'<button class="btn link small" data-action="edit-term">cambiar</button>':'')+flag+'<span class="tcr">'+fmtCr(cr)+' cr</span></div>';
+      html+='<div class="term card" data-term="'+ti+'"><div class="term-head"><h4>'+esc(tS(t.label))+'</h4>'+lim+(edit?'<button class="btn link small" data-action="edit-term">cambiar</button>':'')+flag+'<span class="tcr">'+fmtCr(cr)+' cr</span>'+(edit?'<button class="btn link small deltrm" data-action="del-term" title="Eliminar este trimestre" aria-label="Eliminar '+esc(tS(t.label))+'">Eliminar</button>':'')+'</div>';
       if(t.courses.length){
         t.courses.forEach(function(c){
           var eg=planElecGroup(c,cur,sgMap);
@@ -3726,7 +3728,7 @@ function openTermEditor(ti){
     '<div class="grid2"><label class="field">Máx. créditos<input data-tlc inputmode="numeric" value="'+esc((lim0&&lim0.credits)||'')+'" placeholder="General"></label>'+
     '<label class="field">Máx. clases<input data-tlk inputmode="numeric" value="'+esc((lim0&&lim0.courses)||'')+'" placeholder="General"></label></div>'+
     '<label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" data-treg checked> Regenerar el plan con este límite</label>';
-  modal({title:'Cambiar '+tS(t.label), narrow:true, body:body, buttons:[{label:'Cancelar'},{label:'Guardar',primary:true,onClick:function(b){
+  modal({title:'Cambiar '+tS(t.label), narrow:true, body:body, buttons:[{label:'Eliminar trimestre', danger:true, left:true, onClick:function(){ setTimeout(function(){ openDeleteTerm(ti); },0); }},{label:'Cancelar'},{label:'Guardar',primary:true,onClick:function(b){
     var lc=Core.num(b.querySelector('[data-tlc]').value), lk=Core.num(b.querySelector('[data-tlk]').value);
     var season=b.querySelector('[data-ts]').value, year=parseInt(b.querySelector('[data-ty]').value,10);
     if(!(year>1990 && year<2100)){ toast('Escribe un año válido.'); return false; }
@@ -3743,6 +3745,35 @@ function openTermEditor(ti){
   }}]});
 }
 
+/** Eliminar un trimestre completo: sus cursos pasan al siguiente o quedan por planificar. */
+function openDeleteTerm(ti){
+  var t=S.plan.terms[ti]; if(!t) return;
+  if(t.courses.some(function(c){ return c.fixed || c.grade==='IP'; })){ toast(tS(t.label)+' tiene cursos en progreso (IP); no se puede eliminar.'); return; }
+  var n=t.courses.length, hasNext=ti<S.plan.terms.length-1;
+  var body=(n?'<p style="margin-top:0">'+tS(t.label)+' tiene <strong>'+n+' curso'+(n>1?'s':'')+'</strong> ('+fmtCr(Core.termCredits(t))+' créditos). ¿Qué hago con ellos?</p>'+
+      '<div class="checklist"><label><input type="radio" name="dt" value="move" checked><span><strong>Moverlos al trimestre siguiente</strong><br><span class="small muted">'+(hasNext?'Pasan a '+tS(S.plan.terms[ti+1].label)+'.':'Se crea un trimestre nuevo para ellos.')+' Quedan fijos.</span></span></label>'+
+      '<label><input type="radio" name="dt" value="drop"><span><strong>Quitarlos del plan</strong><br><span class="small muted">Pasan a la lista de cursos que faltan por planificar. Luego puedes usar Acomodar automáticamente.</span></span></label></div>'
+      :'<p style="margin-top:0">'+tS(t.label)+' no tiene cursos.</p>')+
+    '<label class="small" style="display:flex;gap:8px;align-items:flex-start;margin-top:10px"><input type="checkbox" data-shift checked style="margin-top:3px"><span>Correr las fechas de los trimestres siguientes para que no quede un hueco<br><span class="muted">Si lo desmarcas, el plan salta ese trimestre (por ejemplo, si el estudiante no se va a matricular).</span></span></label>'+
+    '<p class="small muted" style="margin-bottom:0">Puedes deshacerlo con Restaurar → Volver al plan anterior.</p>';
+  modal({title:'Eliminar '+tS(t.label), narrow:true, body:body, buttons:[{label:'Cancelar'},{label:'Eliminar trimestre',primary:true,danger:true,onClick:function(b){
+    var mode=(b.querySelector('input[name=dt]:checked')||{}).value||'drop', shift=b.querySelector('[data-shift]').checked;
+    S.planBeforeFill=clone(S.plan);
+    var moved=t.courses.slice(), first={season:t.season, year:t.year};
+    S.plan.terms.splice(ti,1);
+    if(mode==='move' && moved.length){
+      if(ti>=S.plan.terms.length){ var last=S.plan.terms[S.plan.terms.length-1]||{season:first.season,year:first.year}; var nt=S.plan.terms.length?Core.Terms.next(last,S.plannerRules.includeSummer):first; S.plan.terms.push({season:nt.season,year:nt.year,label:Core.Terms.label(nt),courses:[]}); }
+      moved.forEach(function(c){ c.pinned=true; S.plan.terms[ti].courses.push(c); });
+    }
+    if(shift && ti<S.plan.terms.length){
+      var cur2=first;
+      for(var i=ti;i<S.plan.terms.length;i++){ var tt=S.plan.terms[i]; tt.season=cur2.season; tt.year=cur2.year; tt.label=Core.Terms.label(cur2); cur2=Core.Terms.next(cur2,S.plannerRules.includeSummer); }
+    }
+    if(!S.plan.terms.length) S.plan.terms.push({season:first.season,year:first.year,label:Core.Terms.label(first),courses:[]});
+    commitEdit();
+    toast('Trimestre eliminado'+(moved.length?(mode==='move'?'; sus cursos pasaron al siguiente.':'; sus cursos quedan por planificar.'):'.'));
+  }}]});
+}
 /* ---------------- PDF ---------------- */
 function getDownloads(){
   if(session.downloads!==null && session.downloads!==undefined) return Promise.resolve(session.downloads);
@@ -4218,6 +4249,7 @@ document.addEventListener('click',function(e){
   else if(a==='pdf-transcript') askPDF(exportTranscriptPDF);
   else if(a==='edit-course') openCourseEditor(btn.closest('[data-uid]').getAttribute('data-uid'));
   else if(a==='edit-term') openTermEditor(+btn.closest('.term').getAttribute('data-term'));
+  else if(a==='del-term') openDeleteTerm(+btn.closest('.term').getAttribute('data-term'));
   else if(a==='add-course') openAddCourse(+btn.closest('.term').getAttribute('data-term'));
   else if(a==='add-term'){ addNewTerm(); commitEdit(); }
   else if(a==='edit-rec') openRecordEditor(btn.closest('tr').getAttribute('data-rec'));
