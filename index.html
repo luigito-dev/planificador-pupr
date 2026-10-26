@@ -344,6 +344,9 @@ header.top .help{border-color:rgba(255,255,255,.55)}
 .ac-main{grid-area:main}.ac-cr{grid-area:cr;color:var(--muted);font-size:13px;white-space:nowrap}
 .ac-st{grid-area:st;font-size:12.5px;color:var(--muted)}.ac-st:empty{display:none}.ac-st.bad{color:var(--warn)}
 .ac-sum{font-size:14px;margin:0 0 8px;color:var(--muted)}
+.ac-row.hidden-term{display:none}
+.ac-st.moved{color:var(--accent)}
+.ac-st.moved.bad{color:var(--warn)}
 .warnpop{position:fixed;right:16px;top:16px;z-index:70;max-width:360px;background:#fff8e6;color:#5c3d00;border:1px solid #f0c36d;border-left:4px solid var(--warn);border-radius:10px;padding:10px 14px;font-size:14px;box-shadow:0 10px 30px rgba(0,0,0,.15);cursor:pointer}
 .warnpop strong{display:block;margin-bottom:2px}
 @media (max-width:680px){ .warnpop{left:12px;right:12px;max-width:none} }
@@ -3467,8 +3470,9 @@ function warnPop(lines, actions){
 }
 function openAddCourse(ti){
   var cur=curr(); var st=Core.buildStatus(cur,S.records,S.plannerRules);
-  var inPlan={}; S.plan.terms.forEach(function(t){ t.courses.forEach(function(c){ inPlan[c.code]=true; if(c.slot) inPlan[c.slot]=true; }); });
-  var avail=cur.courses.filter(function(c){ return c.type==='ELEC' ? (!inPlan[c.code] && !(st.slots[c.code] && st.slots[c.code].status!=='pending')) : (!st.approved[c.code] && !st.ip[c.code] && !inPlan[c.code]); })
+  // Dónde está cada curso en el plan (si ya está en otro trimestre, al marcarlo se mueve aquí).
+  var loc={}; S.plan.terms.forEach(function(t,i){ t.courses.forEach(function(c){ if(loc[c.code]==null) loc[c.code]=i; if(c.slot && loc[c.slot]==null) loc[c.slot]=i; }); });
+  var avail=cur.courses.filter(function(c){ return c.type==='ELEC' ? !(st.slots[c.code] && st.slots[c.code].status!=='pending') : (!st.approved[c.code] && !st.ip[c.code]); })
     .filter(function(c){ return !(c.type==='PREP' && exemptList().indexOf(c.code)>=0); });
   var sec='', items='';
   avail.forEach(function(c,i){
@@ -3477,16 +3481,18 @@ function openAddCourse(ti){
       '<span class="ac-main"><strong>'+esc(c.code)+'</strong> '+esc(c.name||'')+(c.type==='ELEC'?' '+elecTag(c.group):'')+(c.type==='OPC'?' '+elecTag(c.group):'')+'</span>'+
       '<span class="ac-cr">'+fmtCr(c.credits)+' cr</span><span class="ac-st" data-st="'+i+'"></span></label>';
   });
-  var body='<div class="grid2"><label class="field">Trimestre<select data-term>'+S.plan.terms.map(function(t,i){return '<option value="'+i+'"'+(i===ti?' selected':'')+'>'+esc(tS(t.label))+' ('+fmtCr(Core.termCredits(t))+' cr)</option>';}).join('')+'</select></label>'+
+  var body='<p class="small muted" style="margin:0 0 8px">Los cursos que ya están en otro trimestre también salen; si los marcas, se mueven a este.</p><div class="grid2"><label class="field">Trimestre<select data-term>'+S.plan.terms.map(function(t,i){return '<option value="'+i+'"'+(i===ti?' selected':'')+'>'+esc(tS(t.label))+' ('+fmtCr(Core.termCredits(t))+' cr)</option>';}).join('')+'</select></label>'+
     '<label class="field">Buscar<input data-find placeholder="Código o nombre"></label></div>'+
     '<div class="ac-sum" data-sum></div>'+
-    '<div class="ac-list">'+(items||'<p class="muted small">No quedan cursos del currículo por añadir.</p>')+'</div>'+
+    '<div class="ac-list">'+items+'<p class="muted small" data-empty style="padding:10px">No quedan cursos del currículo por añadir.</p></div>'+
     '<details class="more" style="margin-top:10px"><summary>Curso que no está en el currículo</summary>'+
     '<div class="grid2"><label class="field">Código<input data-code placeholder="ABCD 1234"></label><label class="field">Créditos<input data-cr inputmode="decimal"></label></div>'+
     '<label class="field">Descripción<input data-name></label><label class="field">Prerrequisitos (opcional)<input data-pre placeholder="Separados por coma"></label></details>';
   var m=modal({title:'Agregar cursos', body:body, buttons:[{label:'Cancelar'},{label:'Agregar',primary:true,onClick:function(b){
     var t=+b.querySelector('[data-term]').value, picked=sel(), add=[];
+    var moves=[];
     picked.forEach(function(i){ var c=avail[i];
+      if(loc[c.code]!=null){ moves.push(c); return; }
       add.push({uid:Core.uid(),code:c.code,name:c.name,credits:c.credits,type:c.type,prereqs:c.prereqs,coreqs:c.coreqs,prereqText:c.prereqText,grade:'',placeholder:c.type==='ELEC',slot:c.type==='ELEC'?c.code:undefined,group:c.group,offer:c.offer||null,fixed:false,pinned:true}); });
     var cc=b.querySelector('[data-code]').value.trim();
     if(cc){
@@ -3494,13 +3500,15 @@ function openAddCourse(ti){
       add.push({uid:Core.uid(),code:Core.isCourseCode(cc)?Core.normCode(cc):cc.toUpperCase(),name:b.querySelector('[data-name]').value.trim(),credits:Core.num(b.querySelector('[data-cr]').value),type:'REQ',
         prereqs:pre.split(',').filter(Core.isCourseCode).map(function(x){return [Core.normCode(x)];}),coreqs:[],prereqText:pre,grade:'',placeholder:false,fixed:false,pinned:true});
     }
-    if(!add.length){ toast('Marca al menos un curso.'); return false; }
-    var probs=issues(t, add.concat((m.extraInc||[]).map(function(c){ return {code:c,credits:0,prereqs:[],coreqs:[]}; })));
+    if(!add.length && !moves.length){ toast('Marca al menos un curso.'); return false; }
+    var probs=issues(t, add.concat(moves).concat((m.extraInc||[]).map(function(c){ return {code:c,credits:0,prereqs:[],coreqs:[]}; })));
     add.forEach(function(c){ S.plan.terms[t].courses.push(c); });
+    moves.forEach(function(c){ includeCourse(c.code, t); });
     (m.extraInc||[]).forEach(function(c){ includeCourse(c, t); });
     probs=probs.filter(function(x){ return !(m.extraInc||[]).some(function(c){ return x.indexOf(c)>=0 && /correquisito/.test(x); }); });
     commitEdit();
-    toast(add.length+' curso'+(add.length>1?'s':'')+' agregado'+(add.length>1?'s':'')+' a '+tS(S.plan.terms[t].label)+'.');
+    var nAll=add.length+moves.length;
+    toast(nAll+' curso'+(nAll>1?'s':'')+(moves.length?' puesto'+(nAll>1?'s':'')+' en ':' agregado'+(nAll>1?'s':'')+' a ')+tS(S.plan.terms[t].label)+(moves.length?' ('+moves.length+' movido'+(moves.length>1?'s':'')+' de otro trimestre)':'')+'.');
     if(probs.length) setTimeout(function(){ warnPop(probs); }, 60);
   }}]});
   function sel(){ return [].slice.call(m.body.querySelectorAll('[data-ac]:checked')).map(function(x){ return +x.getAttribute('data-ac'); }); }
@@ -3529,9 +3537,16 @@ function openAddCourse(ti){
     avail.forEach(function(c,i){
       var el=m.body.querySelector('[data-st="'+i+'"]'); if(!el) return;
       var miss=(c.prereqs||[]).filter(function(ors){ return !ors.some(function(x){ return done.has(x); }); }).map(function(ors){ return Core.withWhere(S.plan, ors); });
-      el.textContent=miss.length?'Falta prerrequisito: '+miss.join(', '):'';
-      el.className='ac-st'+(miss.length?' bad':'');
+      var where=loc[c.code], row=m.body.querySelector('.ac-row[data-i="'+i+'"]');
+      if(row) row.classList.toggle('hidden-term', where===t);
+      var parts=[];
+      if(where!=null && where!==t) parts.push('Está en '+tS(S.plan.terms[where].label)+'; se moverá aquí');
+      if(miss.length) parts.push('Falta prerrequisito: '+miss.join(', '));
+      el.textContent=parts.join(' · ');
+      el.className='ac-st'+(miss.length?' bad':'')+(where!=null && where!==t?' moved':'');
     });
+    var shown=[].slice.call(m.body.querySelectorAll('.ac-row')).filter(function(r){ return !r.classList.contains('hidden-term'); }).length;
+    var emp=m.body.querySelector('[data-empty]'); if(emp) emp.classList.toggle('hidden', shown>0);
     var p=sel(), cr=p.reduce(function(s,i){ return s+Core.num(avail[i].credits); },0), base=Core.termCredits(S.plan.terms[t]), lim=Core.termCap(S.plan.terms[t], prEff());
     m.body.querySelector('[data-sum]').innerHTML=p.length?'<strong>'+p.length+' seleccionado'+(p.length>1?'s':'')+'</strong> · '+fmtCr(cr)+' créditos · el trimestre quedaría con <strong'+(base+cr>lim?' style="color:var(--danger)"':'')+'>'+fmtCr(base+cr)+'</strong> de '+fmtCr(lim):'Marca los cursos que quieres poner en este trimestre.';
   }
