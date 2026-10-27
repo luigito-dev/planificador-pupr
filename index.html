@@ -1995,7 +1995,7 @@ function planWindow(edit){
   S.plan.terms.forEach(function(t,i){
     if(cut>=0) return;
     var has=t.courses.length>0;
-    if(!has && !edit) return;
+    if(!has && !edit && !t.manual) return;
     if(n && has && shown>=n){ cut=i; return; }
     idx.push(i); if(has) shown++;
   });
@@ -2492,6 +2492,7 @@ function renderPlan(){
         '<button role="menuitem" data-action="compare">Comparar con otro programa</button>'+
         (hasPrep?'<button role="menuitem" data-action="preps">Preparatorios que aplican</button>':'')+
         '<hr>'+
+        '<button role="menuitem" data-action="add-term">Agregar trimestre</button>'+
         '<button role="menuitem" data-action="blank-plan">Empezar plan en blanco</button>'+
         '<button role="menuitem" data-action="regen-fresh">Hacer el plan de cero</button>'+
       '</div></div></div>';
@@ -2526,7 +2527,7 @@ function renderPlan(){
       if(cr>cap) flag='<span class="flag bad">Excede '+cap+'</span>';
       else if(cr<pr.minCredits && t.courses.length && ti<S.plan.terms.length-1) flag='<span class="flag">Menos de '+pr.minCredits+'</span>';
       var lim=(function(){ var o=(S.termLimits||{})[Core.Terms.label({season:t.season,year:t.year})]; return o&&(o.credits||o.courses)?'<span class="tag">límite: '+(o.credits?o.credits+' cr':'')+(o.credits&&o.courses?' · ':'')+(o.courses?o.courses+' clases':'')+'</span>':''; })();
-      html+='<div class="term card" data-term="'+ti+'"><div class="term-head"><h4>'+esc(tS(t.label))+'</h4>'+lim+(edit?'<button class="btn link small" data-action="edit-term">cambiar</button>':'')+flag+'<span class="tcr">'+fmtCr(cr)+' cr</span>'+(edit?'<button class="btn link small deltrm" data-action="del-term" title="Eliminar este trimestre" aria-label="Eliminar '+esc(tS(t.label))+'">Eliminar</button>':'')+'</div>';
+      html+='<div class="term card" data-term="'+ti+'"><div class="term-head"><h4>'+esc(tS(t.label))+'</h4>'+lim+(edit?'<button class="btn link small" data-action="edit-term">cambiar</button>':'')+flag+'<span class="tcr">'+fmtCr(cr)+' cr</span>'+(edit?'<button class="btn link small" data-action="add-term-before" title="Agregar un trimestre antes de este">+ antes</button>':'')+(edit?'<button class="btn link small deltrm" data-action="del-term" title="Eliminar este trimestre" aria-label="Eliminar '+esc(tS(t.label))+'">Eliminar</button>':'')+'</div>';
       if(t.courses.length){
         t.courses.forEach(function(c){
           var eg=planElecGroup(c,cur,sgMap);
@@ -2549,7 +2550,7 @@ function renderPlan(){
   if(!win.limited) html+='<div class="newterm-drop">Suelta aquí para ponerla en un trimestre nuevo</div>';
   html+='</div>';
   if(win.limited) html+='<div class="notice info" style="display:block"><strong>Se muestran '+win.n+' trimestre'+(win.n>1?'s':'')+'.</strong> Después quedan '+win.rest.length+' cursos ('+fmtCr(win.restCr)+' créditos) por planificar; la graduación estimada sigue siendo '+esc(academicSummary().grad)+'. <button class="btn link" data-action="plan-all">Ver plan completo</button></div>';
-  if(edit && !win.limited) html+='<button class="btn" data-action="add-term">+ Agregar trimestre</button>';
+  if(!win.limited) html+='<button class="btn" data-action="add-term" style="margin-top:14px">+ Agregar trimestre</button>';
   if(S.plan.unscheduled.length) html+='<p class="small muted">* La fecha estimada no incluye los cursos que no se pudieron ubicar.</p>';
   el.innerHTML=html;
 }
@@ -3745,6 +3746,40 @@ function openTermEditor(ti){
   }}]});
 }
 
+/** Agregar un trimestre al final o antes de otro. Si la fecha ya existe, los siguientes se corren. */
+function openAddTerm(beforeIdx){
+  var T=S.plan.terms, seasons=[['Fall','FA'],['Winter','WI'],['Spring','SP'],['Summer','SU']];
+  function suggest(pos){
+    if(pos<=0) { var f=T[0]; if(!f) return {season:S.plannerRules.startSeason, year:+S.plannerRules.startYear}; return {season:f.season, year:f.year}; }
+    return Core.Terms.next(T[pos-1], S.plannerRules.includeSummer);
+  }
+  var pos0=beforeIdx==null?T.length:beforeIdx, sg=suggest(pos0);
+  var body='<label class="field">Dónde<select data-pos>'+T.map(function(x,i){ return '<option value="'+i+'"'+(i===pos0?' selected':'')+'>Antes de '+esc(tS(x.label))+'</option>'; }).join('')+'<option value="'+T.length+'"'+(pos0===T.length?' selected':'')+'>Al final del plan</option></select></label>'+
+    '<div class="grid2"><label class="field">Temporada<select data-ts>'+seasons.map(function(s){ return '<option value="'+s[0]+'"'+(s[0]===sg.season?' selected':'')+'>'+s[1]+' ('+s[0]+')</option>'; }).join('')+'</select></label>'+
+    '<label class="field">Año<input data-ty inputmode="numeric" value="'+sg.year+'"></label></div>'+
+    '<p class="small muted" data-note style="margin:0"></p>';
+  var m=modal({title:'Agregar trimestre', narrow:true, body:body, buttons:[{label:'Cancelar'},{label:'Agregar',primary:true,onClick:function(b){
+    var pos=+b.querySelector('[data-pos]').value, season=b.querySelector('[data-ts]').value, year=parseInt(b.querySelector('[data-ty]').value,10);
+    if(!(year>1990 && year<2100)){ toast('Escribe un año válido.'); return false; }
+    var lbl=Core.Terms.label({season:season,year:year});
+    var nt={season:season, year:year, label:lbl, courses:[], manual:true};
+    T.splice(pos,0,nt);
+    // Si los siguientes chocan con la fecha nueva (o quedan antes), se corren en secuencia.
+    var prev={season:season,year:year};
+    for(var i=pos+1;i<T.length;i++){
+      var want=Core.Terms.next(prev, S.plannerRules.includeSummer||season==='Summer');
+      if(termOrder(T[i])>termOrder(prev)) break;
+      T[i].season=want.season; T[i].year=want.year; T[i].label=Core.Terms.label(want); prev=want;
+    }
+    session.editMode=true; commitEdit();
+    toast('Trimestre '+tS(lbl)+' agregado. Pon clases con "+ Agregar clases" o arrastrándolas.');
+  }}]});
+  var ps=m.body.querySelector('[data-pos]'), note=m.body.querySelector('[data-note]');
+  function upd(){ var s=suggest(+ps.value); m.body.querySelector('[data-ts]').value=s.season; m.body.querySelector('[data-ty]').value=s.year; note.textContent=+ps.value<T.length?'Si la fecha ya está ocupada, los trimestres siguientes se corren.':''; }
+  ps.addEventListener('change',upd); upd();
+}
+/** Orden cronológico de un trimestre (FA Y < WI Y < SP Y+1 < SU Y+1). */
+function termOrder(t){ var o={Fall:0,Winter:1,Spring:2,Summer:3}[t.season]; var ay=(t.season==='Fall'||t.season==='Winter')?+t.year:+t.year-1; return ay*4+o; }
 /** Eliminar un trimestre completo: sus cursos pasan al siguiente o quedan por planificar. */
 function openDeleteTerm(ti){
   var t=S.plan.terms[ti]; if(!t) return;
@@ -4251,7 +4286,8 @@ document.addEventListener('click',function(e){
   else if(a==='edit-term') openTermEditor(+btn.closest('.term').getAttribute('data-term'));
   else if(a==='del-term') openDeleteTerm(+btn.closest('.term').getAttribute('data-term'));
   else if(a==='add-course') openAddCourse(+btn.closest('.term').getAttribute('data-term'));
-  else if(a==='add-term'){ addNewTerm(); commitEdit(); }
+  else if(a==='add-term') openAddTerm();
+  else if(a==='add-term-before') openAddTerm(+btn.closest('.term').getAttribute('data-term'));
   else if(a==='edit-rec') openRecordEditor(btn.closest('tr').getAttribute('data-rec'));
   else if(a==='add-rec') openRecordEditor(null);
 });
