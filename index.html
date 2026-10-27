@@ -760,7 +760,24 @@ var Core = (function () {
     t.split(/[\/,\s]+/).forEach(function (x) { if (OFFER_MAP[x] && out.indexOf(OFFER_MAP[x]) < 0) out.push(OFFER_MAP[x]); });
     return out.length ? out : null;
   }
-  function offeredIn(u, season) { return !u || !u.offer || !u.offer.length || u.offer.indexOf(season) >= 0; }
+  // Regla interna del planificador automático: en Summer solo se matriculan cursos generales
+  // (MATH, SOHU, SPAN, ENGL, electivas, SCIE 0110 y ECON, menos ECON en Business). Lo demás se pone a mano.
+  var summerRule = null;
+  var SUMMER_SUBJECTS = ['MATH', 'SOHU', 'SPAN', 'ENGL'];
+  function summerOK(u) {
+    if (u.offer && u.offer.indexOf('Summer') >= 0) return true;
+    if (u.type === 'ELEC' || u.slot || u.placeholder) return true;
+    var code = String(u.code || '').toUpperCase().replace(/\s+/g, '');
+    if (code === 'SCIE0110') return true;
+    var pre = (code.match(/^[A-Z]+/) || [''])[0];
+    if (SUMMER_SUBJECTS.indexOf(pre) >= 0) return true;
+    if (pre === 'ECON' && !summerRule.business) return true;
+    return false;
+  }
+  function offeredIn(u, season) {
+    if (u && season === 'Summer' && summerRule && !summerOK(u)) return false;
+    return !u || !u.offer || !u.offer.length || u.offer.indexOf(season) >= 0;
+  }
   function parseReqs(s) {
     if (!s) return [];
     return String(s).split(/,|;|\s+y\s+|\s+and\s+/i).map(function (item) {
@@ -983,6 +1000,11 @@ var Core = (function () {
   }
 
   function generatePlan(curr, records, electiveSel, pr, exempt, pins) {
+    summerRule = { business: /^business/i.test(String((curr && curr.program) || '')) };
+    try { return generatePlanInner(curr, records, electiveSel, pr, exempt, pins); }
+    finally { summerRule = null; }
+  }
+  function generatePlanInner(curr, records, electiveSel, pr, exempt, pins) {
     exempt = exempt || [];
     // Cursos fijos que el consejero escogió a mano: {"FA 2026": [cursos], ...}. Se respetan en su trimestre.
     pins = pins || {};
@@ -1240,7 +1262,7 @@ var Core = (function () {
           }
         });
         if (!term.courses.length) {
-          var hasOffer = plan.terms.some(function (tt) { return tt.courses.some(function (c) { return c.offer || c.pinned; }); });
+          var hasOffer = plan.terms.some(function (tt) { return tt.courses.some(function (c) { return c.offer || c.pinned; }); }) || (summerRule && pr.includeSummer);
           if (!hasOffer) { plan.terms.splice(k, 1); relabel(plan, pr); changed = true; }
         }
       }
@@ -2438,6 +2460,7 @@ function openHelp(){
       'Escoge si el sistema hace el plan o si lo haces tú en blanco.' ])+
     sec('2. Leer el plan',[ 'Cada trimestre muestra sus cursos y créditos. Los prerrequisitos salen en <span class="pq pq-done">verde</span> si ya están aprobados, <span class="pq pq-ip">azul</span> si están en progreso y <span class="pq pq-pend">naranja</span> si faltan.',
       'En <strong>Carga</strong> cambias los créditos o clases por trimestre, el Summer y cuántos trimestres mostrar.',
+      'En <strong>Summer</strong> el sistema solo pone cursos generales (MATH, SOHU, SPAN, ENGL, ECON —menos en Business—, SCIE 0110 y electivas). Las clases de concentración en Summer se ponen a mano.',
       'Las <strong>alertas</strong> avisan de probatoria, cursos sin ubicar o reglas que no se cumplen. Tócalas para ver el detalle.' ])+
     sec('3. Cambiar el plan',[ '<strong>Arrastra</strong> una clase a otro trimestre para moverla (en el celular, mantén el dedo sobre la clase un momento y luego arrastra). Si no cumple un prerrequisito sale un aviso, pero se mueve igual.', 'O toca <strong>Editar plan</strong>. En cada curso, <strong>Editar</strong> sirve para moverlo de trimestre o quitarlo.',
       'Con <strong>+ Agregar trimestre</strong> (al final del plan, en Más o con <strong>+ antes</strong> en Editar plan) añades trimestres. Con <strong>+ Agregar curso</strong> marcas varias clases a la vez para un trimestre; si alguna no cumple un prerrequisito sale un aviso, pero se agrega igual. Con <strong>+ Agregar trimestre</strong> añades más trimestres.',
