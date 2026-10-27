@@ -381,6 +381,8 @@ header.top .help{border-color:rgba(255,255,255,.55)}
 .crow{border:1px solid var(--line);border-radius:10px;padding:7px 9px;margin-bottom:6px;background:var(--paper)}
 .crow.ip{border-left:3px solid var(--ip)}
 .editing .crow{border-style:dashed}
+.years .crow[data-uid]{cursor:pointer}
+.years .crow[data-uid]:hover{border-color:var(--accent)}
 .cl1{display:flex;align-items:center;gap:6px;min-width:0}
 .cl1 .code{font-weight:700;font-size:14px;white-space:nowrap}
 .cl1 .nm{flex:1;min-width:0;font-size:13.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -2462,7 +2464,7 @@ function openHelp(){
       'En <strong>Carga</strong> cambias los créditos o clases por trimestre, el Summer y cuántos trimestres mostrar.',
       'En <strong>Summer</strong> el sistema solo pone cursos generales (MATH, SOHU, SPAN, ENGL, ECON —menos en Business—, SCIE 0110 y electivas). Las clases de concentración en Summer se ponen a mano.',
       'Las <strong>alertas</strong> avisan de probatoria, cursos sin ubicar o reglas que no se cumplen. Tócalas para ver el detalle.' ])+
-    sec('3. Cambiar el plan',[ '<strong>Arrastra</strong> una clase a otro trimestre para moverla (en el celular, mantén el dedo sobre la clase un momento y luego arrastra). Si no cumple un prerrequisito sale un aviso, pero se mueve igual.', 'O toca <strong>Editar plan</strong>. En cada curso, <strong>Editar</strong> sirve para moverlo de trimestre o quitarlo.',
+    sec('3. Cambiar el plan',[ '<strong>Arrastra</strong> una clase a otro trimestre para moverla (en el celular, mantén el dedo sobre la clase un momento y luego arrastra). Si no cumple un prerrequisito sale un aviso, pero se mueve igual.', 'También puedes <strong>tocar una clase</strong> y escoger el trimestre en la lista, sin entrar a Editar. Con <strong>cambiar</strong>, junto al nombre del trimestre, cambias su temporada, año o carga.', 'O toca <strong>Editar plan</strong>. En cada curso, <strong>Editar</strong> sirve para moverlo de trimestre o quitarlo.',
       'Con <strong>+ Agregar trimestre</strong> (al final del plan, en Más o con <strong>+ antes</strong> en Editar plan) añades trimestres. Con <strong>+ Agregar curso</strong> marcas varias clases a la vez para un trimestre; si alguna no cumple un prerrequisito sale un aviso, pero se agrega igual. Con <strong>+ Agregar trimestre</strong> añades más trimestres.',
       'Los cursos que escoges o mueves a mano quedan <strong>fijos</strong> y llevan un puntito <span class="pin-dot">•</span> junto al código. En <strong>Editar plan</strong> tocas ○/● para fijar o soltar un curso.',
       '<strong>Acomodar automáticamente</strong> deja tus cursos fijos y el sistema acomoda todo lo demás (también completa un plan en blanco).',
@@ -2551,7 +2553,7 @@ function renderPlan(){
       if(cr>cap) flag='<span class="flag bad">Excede '+cap+'</span>';
       else if(cr<pr.minCredits && t.courses.length && ti<S.plan.terms.length-1) flag='<span class="flag">Menos de '+pr.minCredits+'</span>';
       var lim=(function(){ var o=(S.termLimits||{})[Core.Terms.label({season:t.season,year:t.year})]; return o&&(o.credits||o.courses)?'<span class="tag">límite: '+(o.credits?o.credits+' cr':'')+(o.credits&&o.courses?' · ':'')+(o.courses?o.courses+' clases':'')+'</span>':''; })();
-      html+='<div class="term card" data-term="'+ti+'"><div class="term-head"><h4>'+esc(tS(t.label))+'</h4>'+lim+(edit?'<button class="btn link small" data-action="edit-term">cambiar</button>':'')+flag+'<span class="tcr">'+fmtCr(cr)+' cr</span>'+(edit?'<button class="btn link small" data-action="add-term-before" title="Agregar un trimestre antes de este">+ antes</button>':'')+(edit?'<button class="btn link small deltrm" data-action="del-term" title="Eliminar este trimestre" aria-label="Eliminar '+esc(tS(t.label))+'">Eliminar</button>':'')+'</div>';
+      html+='<div class="term card" data-term="'+ti+'"><div class="term-head"><h4>'+esc(tS(t.label))+'</h4>'+lim+'<button class="btn link small" data-action="edit-term" title="Cambiar temporada, año o carga de este trimestre">cambiar</button>'+flag+'<span class="tcr">'+fmtCr(cr)+' cr</span>'+(edit?'<button class="btn link small" data-action="add-term-before" title="Agregar un trimestre antes de este">+ antes</button>':'')+(edit?'<button class="btn link small deltrm" data-action="del-term" title="Eliminar este trimestre" aria-label="Eliminar '+esc(tS(t.label))+'">Eliminar</button>':'')+'</div>';
       if(t.courses.length){
         t.courses.forEach(function(c){
           var eg=planElecGroup(c,cur,sgMap);
@@ -4247,12 +4249,14 @@ document.addEventListener('pointermove',function(e){
   e.preventDefault(); dragMoveTo(e.clientX,e.clientY);
 });
 document.addEventListener('touchmove',function(e){ if(drag && drag.started) e.preventDefault(); },{passive:false});
+var lastDragEnd=0;
 document.addEventListener('pointerup',function(e){
   if(!drag) return;
   var d=drag;
   if(d.started){
     var tgt=dragTargetAt(e.clientX,e.clientY)||d.target, uid=d.uid;
     dragCleanup();
+    lastDragEnd=Date.now();
     if(tgt){ var to=tgt.classList.contains('newterm-drop')?'new':tgt.getAttribute('data-term'); setTimeout(function(){ dragDrop(uid, to); },0); }
     e.preventDefault();
   } else dragCleanup();
@@ -4266,7 +4270,13 @@ document.addEventListener('click',function(e){
   var tab=e.target.closest('[data-tab]');
   if(tab){ session.tab=tab.getAttribute('data-tab'); session.editMode=false; renderAll(); return; }
   var btn=e.target.closest('[data-action]');
-  if(!btn){ if(!e.target.closest('.menu')) closeMenus(); return; }
+  if(!btn){
+    if(!e.target.closest('.menu')) closeMenus();
+    // Tocar un curso del plan (sin entrar a Editar) abre su ventana para cambiarlo de trimestre.
+    var crow=session.tab==='plan' && e.target.closest('.years .crow[data-uid]');
+    if(crow && !e.target.closest('a,input,select,textarea,label') && Date.now()-lastDragEnd>400 && !document.querySelector('.overlay')) openCourseEditor(crow.getAttribute('data-uid'));
+    return;
+  }
   var a=btn.getAttribute('data-action');
   if(a==='menu'){ var m=btn.closest('.menu'); var open=!m.classList.contains('open'); closeMenus(m); m.classList.toggle('open',open); btn.setAttribute('aria-expanded',String(open)); if(open){ var first=m.querySelector('[role=menuitem]'); if(first) first.focus(); } return; }
   closeMenus();
