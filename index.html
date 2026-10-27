@@ -942,7 +942,7 @@ var Core = (function () {
   function termOverride(t, pr) { var m = pr.termLimits || {}; return m[Terms.label({ season: t.season, year: t.year })] || null; }
   function termCap(t, pr) {
     var o = termOverride(t, pr); if (o && num(o.credits) > 0) return num(o.credits);
-    return t.season === 'Summer' ? Math.min(pr.summerMax, pr.maxCredits) : pr.maxCredits;
+    return t.season === 'Summer' ? (num(pr.summerMax) || pr.maxCredits) : pr.maxCredits;
   }
   /** Máximo de clases por trimestre (0 = sin límite). Los laboratorios de 0 créditos no cuentan como clase. */
   function termCourseCap(t, pr) { var o = termOverride(t, pr); if (o && num(o.courses) > 0) return num(o.courses); return num(pr.maxCourses) || 0; }
@@ -2499,9 +2499,10 @@ function renderPlan(){
     var loadIn='<div class="loadbar"><label>Créditos <select id="loadCr">'+credOpts.map(function(v){return '<option'+(v===Core.num(pr.maxCredits)?' selected':'')+'>'+v+'</option>';}).join('')+(credOpts.indexOf(Core.num(pr.maxCredits))<0?'<option selected>'+pr.maxCredits+'</option>':'')+'</select></label>'+
       '<label>Clases <select id="loadCl">'+clsOpts.map(function(v){return '<option value="'+v+'"'+(v===(Core.num(pr.maxCourses)||0)?' selected':'')+'>'+(v?v:'Sin límite')+'</option>';}).join('')+'</select></label>'+
       '<label>Summer <select id="loadSu"><option value="0"'+(pr.includeSummer?'':' selected')+'>No</option><option value="1"'+(pr.includeSummer?' selected':'')+'>Sí</option></select></label>'+
+      (pr.includeSummer?'<label>Créditos en Summer <select id="loadSm">'+[3,4,6,7,9,10,12,13,15].map(function(v){return '<option'+(v===Core.num(pr.summerMax)?' selected':'')+'>'+v+'</option>';}).join('')+([3,4,6,7,9,10,12,13,15].indexOf(Core.num(pr.summerMax))<0?'<option selected>'+pr.summerMax+'</option>':'')+'</select></label>':'')+
       '<label>Trimestres a planificar <select id="loadTerms">'+[0,1,2,3,4,5,6,8,9,12].map(function(v){return '<option value="'+v+'"'+(v===(Core.num(S.planTerms)||0)?' selected':'')+'>'+(v?v:'Todos (hasta graduarse)')+'</option>';}).join('')+'</select></label></div>';
   }
-    var loadSum=pr.maxCredits+' créditos'+(Core.num(pr.maxCourses)?' · máx. '+pr.maxCourses+' clases':'')+(pr.includeSummer?' · con Summer':' · sin Summer')+(Core.num(S.planTerms)?' · '+S.planTerms+' trimestres':'');
+    var loadSum=pr.maxCredits+' créditos'+(Core.num(pr.maxCourses)?' · máx. '+pr.maxCourses+' clases':'')+(pr.includeSummer?' · Summer: '+(Core.num(pr.summerMax)||pr.maxCredits)+' créditos':' · sin Summer')+(Core.num(S.planTerms)?' · '+S.planTerms+' trimestres':'');
     html+='<details class="loadbox" id="loadBox"'+(session.loadOpen?' open':'')+'><summary><span class="muted">Carga por trimestre:</span> <strong>'+esc(loadSum)+'</strong> <span class="chg">Cambiar</span></summary>'+loadIn+'</details>';
   html+=reviewHTML(pendingSlots);
   if(S.historyChanged) html+='<div class="notice info">El plan tiene cambios manuales y el historial o las reglas cambiaron. Los cursos aprobados y las electivas ya se actualizaron. <button class="btn link" data-action="acomodar">Acomodar automáticamente</button></div>';
@@ -4307,12 +4308,12 @@ document.addEventListener('change',function(e){
     return;
   }
   if(t.id==='loadTerms'){ S.planTerms=Core.num(t.value); save(); renderAll(); toast(S.planTerms?'Planificando '+S.planTerms+' trimestre'+(S.planTerms>1?'s':'')+'.':'Plan completo hasta graduarse.'); return; }
-  if(t.id==='loadCr' || t.id==='loadCl' || t.id==='loadSu'){
+  if(t.id==='loadCr' || t.id==='loadCl' || t.id==='loadSu' || t.id==='loadSm'){
     rememberLoad();
-    if(t.id==='loadCr') S.plannerRules.maxCredits=Core.num(t.value); else if(t.id==='loadCl') S.plannerRules.maxCourses=Core.num(t.value); else S.plannerRules.includeSummer=t.value==='1';
+    if(t.id==='loadCr') S.plannerRules.maxCredits=Core.num(t.value); else if(t.id==='loadCl') S.plannerRules.maxCourses=Core.num(t.value); else if(t.id==='loadSm') S.plannerRules.summerMax=Core.num(t.value); else S.plannerRules.includeSummer=t.value==='1';
     save();
-    if(S.planEdited){ S.historyChanged=true; save(); renderAll(); toast('Límite guardado. Regenera el plan para aplicarlo (tiene cambios manuales).'); }
-    else { regenerate(true); toast(t.id==='loadSu'?(t.value==='1'?'Summer incluido en el plan.':'Plan sin Summer.'):t.id==='loadCr'?'Máximo de '+t.value+' créditos por trimestre.':(t.value==='0'?'Sin límite de clases por trimestre.':'Máximo de '+t.value+' clases por trimestre.')); }
+    if(S.planEdited){ S.historyChanged=true; save(); renderAll(); toast('Carga guardada. Pulsa "Acomodar automáticamente" para aplicarla (tus cursos fijos se respetan).'); }
+    else { regenerate(true); toast(t.id==='loadSm'?'Máximo de '+t.value+' créditos en Summer.':t.id==='loadSu'?(t.value==='1'?'Summer incluido en el plan.':'Plan sin Summer.'):t.id==='loadCr'?'Máximo de '+t.value+' créditos por trimestre.':(t.value==='0'?'Sin límite de clases por trimestre.':'Máximo de '+t.value+' clases por trimestre.')); }
     return;
   }
   if(t.id==='offGPA'){ var v=t.value.trim(); S.officialGPA=v===''?null:Core.num(v); save(); renderAll(); return; }
