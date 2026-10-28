@@ -2669,6 +2669,7 @@ function wizardHTML(){
     '</ol><p class="small muted" style="margin:10px 0 0">¿Dudas? Toca <strong>Ayuda</strong> arriba a la derecha.</p></div>';
 }
 /* ---------------- Ayuda ---------------- */
+var APP_VERSION='28 oct 2026 · 5:40 pm';
 function openHelp(){
   var sec=function(t,items){ return '<h4 style="margin:16px 0 6px">'+t+'</h4><ul style="margin:0;padding-left:20px">'+items.map(function(i){return '<li style="margin:4px 0">'+i+'</li>';}).join('')+'</ul>'; };
   var body='<p style="margin-top:0">El planificador arma el plan de estudios de cada estudiante, trimestre por trimestre, siguiendo los prerrequisitos y las reglas de PUPR.</p>'+
@@ -2692,6 +2693,7 @@ function openHelp(){
       'En la pestaña <strong>Notas</strong> escribes lo hablado con el estudiante; puedes incluirlo en el PDF del plan.',
       'Los estudiantes se guardan solos <strong>en este navegador</strong>. En <strong>Estudiantes → Exportar respaldo</strong> guardas una copia; guárdala en tu OneDrive de PUPR.' ])+
     sec('6. GPA',[ 'Se calcula con la regla de PUPR. Si el oficial es distinto, toca el GPA para escribirlo; <strong>restaurar</strong> vuelve al calculado.' ]);
+  body+='<p class="small muted" style="margin:18px 0 0">Versión de la app: '+APP_VERSION+'</p>';
   modal({title:'Cómo usar el planificador', body:body, buttons:[{label:'Ver el inicio guiado', left:true, onClick:function(){ session.showWizard=true; if(S.plan){ toast('El inicio guiado sale cuando abres un estudiante sin plan (Nuevo estudiante).'); } renderAll(); }},{label:'Entendido',primary:true}]});
 }
 /* ---------------- Plan ---------------- */
@@ -3155,9 +3157,13 @@ function startBlankPlan(){
     }catch(e){}
     var start=terms.length ? Core.Terms.next(terms[0], pr.includeSummer) : {season:pr.startSeason, year:+pr.startYear};
     var nextT={season:start.season, year:start.year, label:Core.Terms.label(start), courses:[]};
-    if(g && S.records.length){
-      var gs=g.terms.filter(function(x){ return x.label===nextT.label; })[0] || g.terms[terms.length];
-      if(gs && gs.label===nextT.label){ nextT.courses=gs.courses.filter(function(c){ return !c.fixed && c.grade!=='IP'; }).map(function(c){ return Object.assign({}, c, {uid:Core.uid(), pinned:false}); }); suggested=nextT.courses.length; }
+    if(g){
+      // Primer trimestre del plan automático que tenga clases que no sean IP: esas son las sugeridas.
+      var gs=g.terms.filter(function(x){ return x.courses.some(function(c){ return !c.fixed && c.grade!=='IP'; }); })[0];
+      if(gs){
+        nextT={season:gs.season, year:gs.year, label:gs.label, courses:gs.courses.filter(function(c){ return !c.fixed && c.grade!=='IP'; }).map(function(c){ return Object.assign({}, c, {uid:Core.uid(), pinned:false}); })};
+        suggested=nextT.courses.length;
+      }
     }
     terms.push(nextT);
     S.planBeforeFill=null;
