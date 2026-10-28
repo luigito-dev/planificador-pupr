@@ -979,7 +979,7 @@ var Core = (function () {
       // Cursos LITE (y ECON, menos en Biomédica y Business) del transcript cuentan como electiva SOHU aunque no estén en la lista del currículo.
       var inCurr = {}; curr.courses.forEach(function (c) { inCurr[c.code] = true; });
       // HIST también cuenta como SOHU y como electiva libre.
-      var sohuRe = /biomed|business/i.test(String(curr.program || '')) ? /^(LITE|HIST)\s/ : /^(LITE|ECON|HIST)\s/;
+      var sohuRe = /biomed|business/i.test(String(curr.program || '')) ? /^(LITE|HIST|SOHU)\s/ : /^(LITE|ECON|HIST|SOHU)\s/;
       var freeRe = /^HIST\s/;
       var pick = function (pool, re) { return Object.keys(pool).filter(function (code) { return re.test(code) && !inCurr[code] && !used[code] && num(pool[code].credits || 3) > 0; }).sort(); };
       var extraFill = [['SOHU', sohuRe], ['FREE', freeRe], ['OPEN', freeRe]];
@@ -2684,7 +2684,7 @@ function wizardHTML(){
     '</ol><p class="small muted" style="margin:10px 0 0">¿Dudas? Toca <strong>Ayuda</strong> arriba a la derecha.</p></div>';
 }
 /* ---------------- Ayuda ---------------- */
-var APP_VERSION='28 oct 2026 · 6:10 pm';
+var APP_VERSION='28 oct 2026 · 6:15 pm';
 function openHelp(){
   var sec=function(t,items){ return '<h4 style="margin:16px 0 6px">'+t+'</h4><ul style="margin:0;padding-left:20px">'+items.map(function(i){return '<li style="margin:4px 0">'+i+'</li>';}).join('')+'</ul>'; };
   var body='<p style="margin-top:0">El planificador arma el plan de estudios de cada estudiante, trimestre por trimestre, siguiendo los prerrequisitos y las reglas de PUPR.</p>'+
