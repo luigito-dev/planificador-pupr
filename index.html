@@ -149,6 +149,16 @@ h4.sec{font-size:15px;font-weight:600;margin:26px 0 8px}
 .overlay{position:fixed;inset:0;background:rgba(10,16,24,.45);display:flex;align-items:center;justify-content:center;padding:16px;z-index:50}
 .modal{background:var(--paper);color:var(--ink);border-radius:12px;max-width:720px;width:100%;max-height:calc(100% - 32px);display:flex;flex-direction:column;box-shadow:0 24px 60px rgba(0,0,0,.25)}
 .modal.narrow{max-width:460px}
+.modal .grab{display:none}
+@media (max-width:680px){
+  .overlay{align-items:flex-end;padding:0}
+  .modal,.modal.narrow,.modal.wide{max-width:100%;border-radius:18px 18px 0 0;max-height:92%;padding-bottom:env(safe-area-inset-bottom,0px);box-shadow:0 -8px 30px rgba(0,0,0,.2);animation:sheetUp .22s ease-out}
+  .modal.sheetm{height:92%}
+  .modal .grab{display:block;width:40px;height:5px;border-radius:3px;background:var(--line);margin:8px auto 0;flex:none}
+  .modal header{touch-action:none}
+}
+@keyframes sheetUp{from{transform:translateY(40px);opacity:.6}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){.modal{animation:none!important}}
 .modal header{padding:16px 20px 10px;display:flex;justify-content:space-between;align-items:center}
 .modal header h3{margin:0;font-size:17px}
 .modal .mbody{padding:6px 20px 16px;overflow:auto}
@@ -209,8 +219,8 @@ pre.raw{white-space:pre-wrap;font-size:12px;background:var(--soft);padding:12px;
 .stid{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:14px;color:var(--muted)}
 .stid input{font-size:14px;padding:4px 8px;width:160px;color:var(--ink)}
 /* GPA editable en el encabezado */
-.gpa-inline{font:inherit;font-size:24px;font-weight:600;width:96px;padding:0 4px;margin-left:-5px;border:1px solid transparent;border-bottom:1px dashed var(--muted);border-radius:6px 6px 0 0;background:none;color:var(--ink);cursor:text}
-.gpa-inline:hover{border-color:var(--line);border-radius:6px} .gpa-inline:focus{border-color:var(--accent);outline:none}
+.gpa-inline{font:inherit;font-size:24px;font-weight:600;width:96px;padding:0 4px;margin-left:-5px;border:1px solid transparent;border-radius:6px;background:none;color:var(--ink);cursor:text}
+.gpa-inline:hover{border-color:var(--line)} .gpa-inline:focus{border-color:var(--accent);outline:none}
 @media (max-width:680px){ .gpa-inline{font-size:20px} }
 /* Carga por trimestre */
 .loadbar{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;font-size:14px;margin:0 0 12px;padding:10px 12px;background:var(--soft);border-radius:8px}
@@ -1725,7 +1735,7 @@ function gradeClass(g){
 function modal(opts){
   var ov=document.createElement('div'); ov.className='overlay';
   if(opts.sheet) ov.classList.add('sheeto');
-  ov.innerHTML='<div class="modal'+(opts.narrow?' narrow':'')+(opts.wide?' wide':'')+(opts.sheet?' sheetm':'')+'" role="dialog" aria-modal="true" aria-labelledby="mt"><header><h3 id="mt">'+esc(opts.title)+
+  ov.innerHTML='<div class="modal'+(opts.narrow?' narrow':'')+(opts.wide?' wide':'')+(opts.sheet?' sheetm':'')+'" role="dialog" aria-modal="true" aria-labelledby="mt"><div class="grab" aria-hidden="true"></div><header><h3 id="mt">'+esc(opts.title)+
     '</h3><button class="btn link" data-x aria-label="Cerrar">Cerrar</button></header><div class="mbody"></div><footer></footer></div>';
   var body=ov.querySelector('.mbody'), foot=ov.querySelector('footer');
   if(typeof opts.body==='string') body.innerHTML=opts.body; else if(opts.body) body.appendChild(opts.body);
@@ -1741,7 +1751,18 @@ function modal(opts){
   ov.addEventListener('mousedown',function(e){ if(e.target===ov) close(); });
   document.addEventListener('keydown',onKey);
   document.body.appendChild(ov);
-  var f=ov.querySelector('input,select,textarea,.btn.primary'); if(f) f.focus();
+  var small=window.matchMedia && window.matchMedia('(max-width:680px)').matches;
+  // En el celular no se abre el teclado solo al abrir la ventana.
+  var f=ov.querySelector(small?'select,.btn.primary':'input,select,textarea,.btn.primary'); if(f) f.focus({preventScroll:true});
+  // En el celular la ventana sale desde abajo y se cierra deslizándola hacia abajo (desde la rayita o el título).
+  if(small){
+    var md=ov.querySelector('.modal'), sy=null, dy=0;
+    var startEl=function(e){ return e.target.closest('.grab,header') && !e.target.closest('button,a,input,select'); };
+    md.addEventListener('touchstart',function(e){ if(!startEl(e)) return; sy=e.touches[0].clientY; dy=0; md.style.transition='none'; },{passive:true});
+    md.addEventListener('touchmove',function(e){ if(sy==null) return; dy=Math.max(0,e.touches[0].clientY-sy); md.style.transform='translateY('+dy+'px)'; },{passive:true});
+    md.addEventListener('touchend',function(){ if(sy==null) return; sy=null; md.style.transition='transform .18s ease-out';
+      if(dy>90){ md.style.transform='translateY(100%)'; setTimeout(close,170); } else md.style.transform=''; });
+  }
   return { body:body, close:close, el:ov };
 }
 function confirmWarnings(warnings, onContinue, onCancel, extras){
