@@ -161,6 +161,9 @@ h4.sec{font-size:15px;font-weight:600;margin:26px 0 8px}
 .checklist label.dis{opacity:.55}
 .pdfpage{display:block;max-width:100%;margin:0 auto 12px;border:1px solid var(--line)}
 pre.raw{white-space:pre-wrap;font-size:12px;background:var(--soft);padding:12px;border-radius:8px;max-height:60vh;overflow:auto}
+.saved-pill{position:fixed;top:72px;right:16px;z-index:59;background:var(--paper);color:var(--ok);border:1px solid var(--line);box-shadow:0 2px 10px rgba(0,0,0,.08);padding:5px 12px;border-radius:999px;font-size:13px;font-weight:600;opacity:0;transform:translateY(-6px);transition:opacity .25s,transform .25s;pointer-events:none}
+.saved-pill.show{opacity:1;transform:none}
+@media (prefers-reduced-motion:reduce){.saved-pill{transition:none}}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:10px;font-size:14px;z-index:60;max-width:90%}
 .empty{padding:28px 0 12px}
 .empty h3{margin:0 0 6px;font-size:17px}
@@ -1532,7 +1535,25 @@ var session = { pdfData:null, editMode:false, downloads:null, tab:'plan', rulesO
 function save(){
   if(!S.roster) S.roster={}; if(!S.currentId) S.currentId=Core.uid();
   if(hasStudentData()) S.roster[S.currentId]=snapshotStudent();
-  try{ localStorage.setItem(STORE, JSON.stringify(S)); }catch(e){ toast('No se pudo guardar: el almacenamiento del navegador está lleno.'); }
+  var js=JSON.stringify(S);
+  try{
+    if(lastSavedJSON===undefined){ try{ lastSavedJSON=localStorage.getItem(STORE); }catch(e2){ lastSavedJSON=null; } }
+    localStorage.setItem(STORE, js);
+    if(js!==lastSavedJSON && hasStudentData()) flashSaved();
+    lastSavedJSON=js;
+  }catch(e){ toast('No se pudo guardar: el almacenamiento del navegador está lleno.'); }
+}
+/* Aviso breve "✓ Guardado" que aparece después de un cambio y se va solo. */
+var lastSavedJSON, savedTimer, savedHide;
+function flashSaved(){
+  clearTimeout(savedTimer); clearTimeout(savedHide);
+  savedTimer=setTimeout(function(){
+    var el=document.getElementById('savedPill');
+    if(!el){ el=document.createElement('div'); el.id='savedPill'; el.className='saved-pill'; el.setAttribute('role','status'); el.setAttribute('aria-live','polite'); el.textContent='✓ Guardado'; document.body.appendChild(el); }
+    var hd=document.querySelector('header,.topbar'); var hb=hd?hd.getBoundingClientRect().bottom:0; el.style.top=Math.max(12,hb+10)+'px';
+    el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+    savedHide=setTimeout(function(){ el.classList.remove('show'); },1600);
+  },700);
 }
 function clone(x){ return JSON.parse(JSON.stringify(x)); }
 
