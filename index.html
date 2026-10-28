@@ -2652,11 +2652,49 @@ function planSummaryText(){
   if(win.limited) L.push('', 'Después de estos trimestres quedan '+win.rest.length+' cursos ('+fmtCr(win.restCr)+' créditos) por planificar.');
   var miss=missingCourses(); if(miss.length) L.push('', 'Cursos que aún faltan por planificar: '+miss.map(function(c){ return c.code; }).join(', ')+'.');
   L.push('', 'Este plan es una guía y puede cambiar según la oferta de cursos y tu progreso académico. Si tienes preguntas, comunícate conmigo.', '');
+  return L.concat(emailSignature()).join('\n');
+}
+/** Fecha de hoy escrita en español: "28 de octubre de 2026". */
+function fechaHoy(){
+  var d=new Date(), M=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  return d.getDate()+' de '+M[d.getMonth()]+' de '+d.getFullYear();
+}
+/** Firma del correo: nombre del consejero que trabajó el plan, puesto, oficina y fecha automática. */
+function emailSignature(){
+  var sg=Object.assign({}, SIGNER_DEFAULT, S.signer||{}), L=[];
   if(sg.name) L.push(sg.name);
   if(sg.title) L.push(sg.title);
   if(sg.dept) L.push(sg.dept);
   L.push('Universidad Politécnica de Puerto Rico');
-  return L.join('\n');
+  L.push('Fecha: '+fechaHoy());
+  return L;
+}
+function pdfEmailText(){
+  var first=(S.student.name||'').trim().split(/\s+/)[0]||'';
+  return ['Saludos'+(first?' '+first:'')+':','',
+    'Te envío adjunto tu plan académico en '+programName(S.program)+' en PDF.','',
+    'Este plan es una guía y puede cambiar según la oferta de cursos y tu progreso académico. Si tienes preguntas, comunícate conmigo.',''].concat(emailSignature()).join('\n');
+}
+/** Enviar el plan como PDF: en celulares y navegadores que lo permiten se abre "Compartir" con el PDF adjunto;
+    si no, se descarga el PDF y se abre el correo para adjuntarlo. */
+function sendPlanPDF(em, subj){
+  askPDF(function(){
+    var r=exportPlanPDF({blob:true}); if(!r) return;
+    var body=pdfEmailText(), file=null;
+    try{ file=new File([r.blob], r.name, {type:'application/pdf'}); }catch(e){}
+    if(file && navigator.canShare && navigator.canShare({files:[file]})){
+      navigator.share({files:[file], title:subj, text:body}).then(function(){ toast('Plan enviado.'); }).catch(function(err){ if(!err || err.name!=='AbortError') fallback(); });
+    } else fallback();
+    function fallback(){
+      saveFile(r.name, r.blob).then(function(){
+        setTimeout(function(){
+          window.location.href='mailto:'+encodeURIComponent(em)+'?subject='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);
+          toast('Se descargó el PDF. Adjúntalo al correo que se abrió.');
+        },600);
+      });
+    }
+  },{missing:true, notes:true, title:'Enviar el plan en PDF', okLabel:'Preparar correo',
+     intro:'<p class="small muted" style="margin-top:0">El PDF sale igual que al descargarlo.</p>'});
 }
 function openEmailSummary(){
   if(!S.plan){ toast('Genera el plan primero.'); return; }
@@ -2664,9 +2702,14 @@ function openEmailSummary(){
   var body='<p class="small muted" style="margin-top:0">Revisa o cambia el texto y luego cópialo o ábrelo en tu correo. Envíalo al <strong>correo institucional</strong> del estudiante.</p>'+
     '<div class="grid2"><label class="field">Correo del estudiante<input data-em type="email" value="'+esc(S.student.email||'')+'" placeholder="Correo institucional del estudiante"></label>'+
     '<label class="field">Asunto<input data-sj value="'+esc(subj)+'"></label></div>'+
+    '<label class="field">Consejero que trabajó el plan<input data-cn value="'+esc((S.signer&&S.signer.name)||'')+'" placeholder="Tu nombre (sale al final del correo y en la firma del PDF)"></label>'+
     '<label class="field">Mensaje<textarea data-tx rows="16" style="font-family:inherit;font-size:14px;line-height:1.45">'+esc(planSummaryText())+'</textarea></label>';
   var m=modal({title:'Enviar el plan por correo', wide:true, body:body, buttons:[
     {label:'Cerrar', left:true},
+    {label:'Enviar como PDF', onClick:function(b){
+      var em=b.querySelector('[data-em]').value.trim(); S.student.email=em; save();
+      var sj=b.querySelector('[data-sj]').value;
+      setTimeout(function(){ sendPlanPDF(em, sj); },0); }},
     {label:'Copiar texto', onClick:function(b){ var tx=b.querySelector('[data-tx]').value;
       (navigator.clipboard&&navigator.clipboard.writeText?navigator.clipboard.writeText(tx):Promise.reject()).then(function(){ toast('Texto copiado. Pégalo en tu correo.'); },function(){ var ta=b.querySelector('[data-tx]'); ta.select(); try{ document.execCommand('copy'); toast('Texto copiado. Pégalo en tu correo.'); }catch(e){ toast('Selecciona el texto y cópialo.'); } });
       return false; }},
@@ -2677,6 +2720,12 @@ function openEmailSummary(){
       window.location.href=url; return false; }}
   ]});
   m.body.querySelector('[data-em]').addEventListener('change',function(e){ S.student.email=e.target.value.trim(); save(); });
+  var tx=m.body.querySelector('[data-tx]'), edited=false;
+  tx.addEventListener('input',function(){ edited=true; });
+  m.body.querySelector('[data-cn]').addEventListener('input',function(e){
+    S.signer=Object.assign({}, SIGNER_DEFAULT, S.signer||{}); S.signer.name=e.target.value.trim(); save();
+    if(!edited) tx.value=planSummaryText();
+  });
 }
 /* ---------------- Notas del consejero ---------------- */
 function renderNotes(){
@@ -3950,7 +3999,7 @@ function askPDF(fn, opts){
     '<label class="field">Nombre del consejero (opcional)<input data-sg="name" value="'+esc(sg.name)+'" placeholder="Ej. Luis Rivera"></label>'+
     '<label class="field">Puesto<input data-sg="title" value="'+esc(sg.title)+'"></label>'+
     '<label class="field">Oficina<input data-sg="dept" value="'+esc(sg.dept)+'"></label></div>';
-  var m=modal({title:'Descargar PDF', narrow:true, body:body, buttons:[{label:'Cancelar'},{label:'Descargar',primary:true,onClick:function(b){
+  var m=modal({title:opts.title||'Descargar PDF', narrow:true, body:(opts.intro||'')+body, buttons:[{label:'Cancelar'},{label:opts.okLabel||'Descargar',primary:true,onClick:function(b){
     var chk=b.querySelector('[data-sg-on]').checked, nv={};
     b.querySelectorAll('[data-sg]').forEach(function(i){ nv[i.getAttribute('data-sg')]=i.value.trim(); });
     var mb=b.querySelector('[data-miss]'); if(mb){ S.missOn=mb.checked; }
@@ -4044,7 +4093,7 @@ function drawColoredParts(doc, parts, cell){
   });
   doc.setFont('helvetica','normal');
 }
-function exportPlanPDF(){
+function exportPlanPDF(opts){
   if(!S.plan){ toast('Genera el plan primero.'); return; }
   var curP=curr(), sgP=slotGroupMap(curP), stPdf=Core.buildStatus(curP,S.records,S.plannerRules);
   var doc=pdfDoc(); if(!doc) return;
@@ -4109,6 +4158,7 @@ function exportPlanPDF(){
   }
   pdfSignature(doc, y);
   pdfLetterhead(doc);
+  if(opts && opts.blob) return { name:fileBase()+' - Plan.pdf', blob:doc.output('blob') };
   saveFile(fileBase()+' - Plan.pdf', doc.output('blob'));
 }
 function exportTranscriptPDF(){
@@ -4366,7 +4416,7 @@ document.addEventListener('click',function(e){
   else if(a==='electives') openElectives();
   else if(a==='preps') openPreps();
   else if(a==='view-transcript') viewTranscript();
-  else if(a==='pdf-plan') askPDF(exportPlanPDF,{missing:true,notes:true});
+  else if(a==='pdf-plan') askPDF(function(){ exportPlanPDF(); },{missing:true,notes:true});
   else if(a==='pdf-transcript') askPDF(exportTranscriptPDF);
   else if(a==='edit-course') openCourseEditor(btn.closest('[data-uid]').getAttribute('data-uid'));
   else if(a==='edit-term') openTermEditor(+btn.closest('.term').getAttribute('data-term'));
