@@ -2046,7 +2046,7 @@ function reviewHTML(pendingSlots){
   var chips=[], n=0, items=[];
   session.review=null;
   al.forEach(function(a){ items.push({t:a.t, bad:a.lvl==='bad'}); });
-  if(pendingSlots) items.push({t:pendingSlots+' electiva'+(pendingSlots>1?'s':'')+' por escoger.'});
+  if(pendingSlots) items.push({t:pendingSlots+' electiva'+(pendingSlots>1?'s':'')+' por escoger.', act:'open-audit', actLabel:'Escoger o ver electivas'});
   if(miss.length) items.push({t:'Faltan '+miss.length+' curso'+(miss.length>1?'s':'')+' por planificar: '+miss.map(function(c){return c.code;}).join(', ')+'.'});
   if(uns.length) items.push({t:uns.length+' curso'+(uns.length>1?'s':'')+' sin ubicar: '+uns.map(function(u){return u.code;}).join(', ')+'.', bad:true});
   if(pendingSlots){ chips.push('<span class="chip">'+pendingSlots+' electiva'+(pendingSlots>1?'s':'')+' por escoger</span>'); n++; }
@@ -2066,16 +2066,15 @@ function reviewHTML(pendingSlots){
   }
   var sig=chips.join('|').replace(/<[^>]+>/g,'');
   session.review={ items:items, body:'<div class="chips" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">'+chips.join('')+'</div>'+body, sig:sig, n:n };
-  if(S.reviewHidden===sig) return '';
-  return '<button class="spill warn'+(nb||uns.length?' bad':'')+'" id="reviewBox" data-action="review-open" title="Toca para ver qué revisar"><b>'+n+'</b> por revisar</button>';
+  return '<button class="spill warn'+(nb||uns.length?' bad':'')+'" id="reviewBox" data-action="review-open" title="Toca para ver las alertas"><b>'+items.length+'</b> Alertas</button>';
 }
-/** Más → Alertas: lista sencilla de lo que hay por revisar. */
+/** Alertas: lista sencilla; las electivas se pueden escoger o ver desde aquí. */
 function openAlertsList(){
-  var r=session.review, hidden=r && S.reviewHidden===r.sig;
+  var r=session.review;
   var body=!r||!r.items.length ? '<p style="margin:0">No hay alertas para este estudiante.</p>' :
-    '<ul class="alist">'+r.items.map(function(i){ return '<li'+(i.bad?' class="bad"':'')+'>'+esc(i.t)+'</li>'; }).join('')+'</ul>'+
-    (hidden?'<p class="small muted" style="margin:10px 0 0">Esta alerta está oculta en el plan.</p>':'');
-  modal({title:'Alertas', narrow:true, body:body, buttons:(hidden?[{label:'Mostrar en el plan otra vez', left:true, onClick:function(){ S.reviewHidden=null; save(); renderAll(); }}]:[]).concat([{label:'Cerrar', primary:true}])});
+    '<ul class="alist">'+r.items.map(function(i){ return '<li'+(i.bad?' class="bad"':'')+'>'+esc(i.t)+(i.act?' <button class="btn link small" data-action="'+i.act+'">'+esc(i.actLabel)+'</button>':'')+'</li>'; }).join('')+'</ul>';
+  var m=modal({title:'Alertas', narrow:true, body:body});
+  m.body.addEventListener('click',function(e){ if(e.target.closest('[data-action]')) setTimeout(m.close,0); });
 }
 function openReview(){
   var r=session.review; if(!r) return;
@@ -2619,7 +2618,7 @@ function renderPlan(){
       '<span class="spacer"></span>'+
       '<button class="btn ghost danger" data-action="delete-plan" title="Borrar el plan o todo lo del estudiante">Borrar</button>'+
       '<div class="menu"><button class="btn ghost" data-action="menu" aria-haspopup="true" aria-expanded="false">Más ▾</button><div class="menu-list" role="menu">'+
-        '<button role="menuitem" data-action="alerts-list">Alertas'+(session.review&&session.review.items.length?' ('+session.review.items.length+')':'')+'</button><hr>'+
+
         (planWindow(edit).limited?'<button role="menuitem" data-action="add-term">Agregar trimestre</button>':'')+
         '<button role="menuitem" data-action="blank-plan">Empezar plan en blanco</button>'+
         '<button role="menuitem" data-action="regen-fresh">Hacer el plan de cero</button>'+
@@ -4571,7 +4570,7 @@ document.addEventListener('click',function(e){
   else if(a==='term-cost') openTermCost(+btn.closest('.term').getAttribute('data-term'));
   else if(a==='cost-settings') openCostSettings();
   else if(a==='cost-toggle'){ S.costs=S.costs||{}; S.costs.on=!S.costs.on; save(); renderPlan(); }
-  else if(a==='review-open') openReview();
+  else if(a==='review-open') openAlertsList();
   else if(a==='alerts-list') openAlertsList();
   else if(a==='del-term') openDeleteTerm(+btn.closest('.term').getAttribute('data-term'));
   else if(a==='add-course') openAddCourse(+btn.closest('.term').getAttribute('data-term'));
