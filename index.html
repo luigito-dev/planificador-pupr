@@ -2728,14 +2728,14 @@ function renderPlan(){
 
 /* ---------------- Costo aproximado por trimestre (opcional) ---------------- */
 // Tarifas: Anejo-A, Costo de Matrícula, PUPR Recinto de San Juan, año fiscal 2026-2027 (rev. 17 de marzo de 2026).
-var COST_DEFAULT={ rates:{eng:290, arch:295, bus:235, assoc:225, gen:265}, generalFee:390, generalFeeSummer:195, labFee:390, designFee:390, parking:85,
+var COST_DEFAULT={ rates:{eng:290, arch:295, bus:235, assoc:225, gen:265}, generalFee:390, generalFeeSummer:195, labFee:390, designFee:390,
   source:'Anejo-A, Costo de Matrícula PUPR Recinto de San Juan, año fiscal 2026-2027 (rev. 17 de marzo de 2026)' };
 var COST_CATS=[['eng','Ingeniería y Ciencias de Computadoras'],['arch','Arquitectura'],['bus','Administración de Empresas'],['assoc','Grado Asociado'],['gen','Curso general']];
 function costCfg(){
   var c=S.costs||{}, d=COST_DEFAULT;
-  return { on:!!c.on, parking:!!c.parking, design:c.design!==false, pdf:c.pdf!==false,
+  return { on:!!c.on, design:c.design!==false,
     rates:Object.assign({}, d.rates, c.rates||{}), generalFee:c.generalFee!=null?c.generalFee:d.generalFee, generalFeeSummer:c.generalFeeSummer!=null?c.generalFeeSummer:d.generalFeeSummer,
-    labFee:c.labFee!=null?c.labFee:d.labFee, designFee:c.designFee!=null?c.designFee:d.designFee, parkingFee:c.parkingFee!=null?c.parkingFee:d.parking, cat:c.cat||{} };
+    labFee:c.labFee!=null?c.labFee:d.labFee, designFee:c.designFee!=null?c.designFee:d.designFee, cat:c.cat||{} };
 }
 function costCatAuto(key){
   var n=String(key||'');
@@ -2760,8 +2760,8 @@ function termCost(t, cfg){
   var cat=costCat(cfg), rate=Core.num(cfg.rates[cat]), cr=open.reduce(function(s,c){ return s+Core.num(c.credits); },0);
   var nLab=open.filter(isLabCourse).length, nDes=(cat==='arch' && cfg.design)?open.filter(isDesignCourse).length:0;
   var r={ credits:cr, rate:rate, tuition:cr*rate, gen:Core.num(t.season==='Summer'?cfg.generalFeeSummer:cfg.generalFee), nLab:nLab, lab:nLab*Core.num(cfg.labFee),
-    nDes:nDes, design:nDes*Core.num(cfg.designFee), parking:cfg.parking?Core.num(cfg.parkingFee):0 };
-  r.total=r.tuition+r.gen+r.lab+r.design+r.parking;
+    nDes:nDes, design:nDes*Core.num(cfg.designFee) };
+  r.total=r.tuition+r.gen+r.lab+r.design;
   return r;
 }
 function money(n){ return '$'+Math.round(Core.num(n)).toLocaleString('en-US'); }
@@ -2769,7 +2769,6 @@ function costRows(r){
   var L=[[fmtCr(r.credits)+' créditos × '+money(r.rate), money(r.tuition)], ['Cuota general', money(r.gen)]];
   if(r.nLab) L.push([r.nLab+' laboratorio'+(r.nLab>1?'s':'')+' × '+money(r.lab/r.nLab), money(r.lab)]);
   if(r.nDes) L.push([r.nDes+' curso'+(r.nDes>1?'s':'')+' de diseño × '+money(r.design/r.nDes), money(r.design)]);
-  if(r.parking) L.push(['Estacionamiento', money(r.parking)]);
   return L;
 }
 function openTermCost(ti){
@@ -2783,22 +2782,22 @@ function openCostSettings(){
   var cfg=costCfg(), cat=costCat(cfg);
   var num=function(k,label,v){ return '<label class="field">'+label+'<input data-ck="'+k+'" inputmode="decimal" value="'+v+'"></label>'; };
   var body='<div class="checklist" style="margin-bottom:10px"><label><input type="checkbox" data-con'+(cfg.on?' checked':'')+'><span><strong>Mostrar el costo aproximado de cada trimestre</strong><br><span class="small muted">Sale en cada trimestre del plan. Es opcional y lo puedes apagar cuando quieras.</span></span></label>'+
-      '<label><input type="checkbox" data-cpdf'+(cfg.pdf?' checked':'')+'><span><strong>Incluirlo en el PDF del plan</strong></span></label></div>'+
+      '</div><p class="small muted" style="margin:-4px 0 10px">Es solo una referencia para ver en la app. No sale en los PDF ni en el correo.</p>'+
     '<label class="field">Tarifa por crédito para '+esc(programName(S.program)||'este programa')+'<select data-ccat>'+COST_CATS.map(function(c){ return '<option value="'+c[0]+'"'+(c[0]===cat?' selected':'')+'>'+c[1]+' ('+money(cfg.rates[c[0]])+')</option>'; }).join('')+'</select></label>'+
     '<details style="margin:6px 0 10px"><summary class="small">Ver o cambiar las tarifas</summary><div class="grid2" style="margin-top:8px">'+
       COST_CATS.map(function(c){ return num('r_'+c[0], 'Crédito · '+c[1], cfg.rates[c[0]]); }).join('')+
       num('generalFee','Cuota general (trimestre)',cfg.generalFee)+num('generalFeeSummer','Cuota general (Summer)',cfg.generalFeeSummer)+
-      num('labFee','Cargo por laboratorio',cfg.labFee)+num('designFee','Cargo de diseño (Arquitectura)',cfg.designFee)+num('parkingFee','Estacionamiento',cfg.parkingFee)+
+      num('labFee','Cargo por laboratorio',cfg.labFee)+num('designFee','Cargo de diseño (Arquitectura)',cfg.designFee)+
     '</div></details>'+
-    '<div class="checklist"><label><input type="checkbox" data-cpark'+(cfg.parking?' checked':'')+'><span>Sumar estacionamiento cada trimestre</span></label>'+
+    '<div class="checklist">'+
       '<label><input type="checkbox" data-cdes'+(cfg.design?' checked':'')+'><span>Sumar el cargo de diseño a los cursos de diseño (solo Arquitectura)</span></label></div>'+
     '<p class="small muted">Tarifas de '+esc(COST_DEFAULT.source)+'. Todo curso de 0 o 1 crédito se cuenta como laboratorio.</p>';
   modal({title:'Costo aproximado', narrow:true, body:body, buttons:[
-    {label:'Tarifas oficiales', left:true, onClick:function(){ var c=S.costs||{}; S.costs={on:c.on, pdf:c.pdf, parking:c.parking, design:c.design, cat:c.cat}; save(); renderAll(); toast('Tarifas 2026-2027 restauradas.'); }},
+    {label:'Tarifas oficiales', left:true, onClick:function(){ var c=S.costs||{}; S.costs={on:c.on, design:c.design, cat:c.cat}; save(); renderAll(); toast('Tarifas 2026-2027 restauradas.'); }},
     {label:'Cancelar'},
     {label:'Guardar', primary:true, onClick:function(b){
-      var c=S.costs=S.costs||{}; c.on=b.querySelector('[data-con]').checked; c.pdf=b.querySelector('[data-cpdf]').checked;
-      c.parking=b.querySelector('[data-cpark]').checked; c.design=b.querySelector('[data-cdes]').checked;
+      var c=S.costs=S.costs||{}; c.on=b.querySelector('[data-con]').checked; delete c.pdf; delete c.parking; delete c.parkingFee;
+      c.design=b.querySelector('[data-cdes]').checked;
       c.rates=c.rates||{}; c.cat=c.cat||{};
       b.querySelectorAll('[data-ck]').forEach(function(i){ var k=i.getAttribute('data-ck'), v=Core.num(i.value); if(k.indexOf('r_')===0) c.rates[k.slice(2)]=v; else c[k]=v; });
       var sel=b.querySelector('[data-ccat]').value; if(sel===costCatAuto(S.program)) delete c.cat[S.program]; else c.cat[S.program]=sel;
@@ -4287,15 +4286,13 @@ function exportPlanPDF(opts){
   [['completado','done'],['en progreso','ip'],['pendiente','pend']].forEach(function(l,i){ doc.setFont('helvetica','bold'); doc.setTextColor.apply(doc,hexRGB(PRE_COLORS[l[1]])); doc.text(l[0], 118+i*68, y-6); });
   y+=16;
   var winP=planWindow(false);
-  var pdfCfg=costCfg(), pdfCost=pdfCfg.on && pdfCfg.pdf, pdfCostTot=0;
   S.plan.terms.forEach(function(t,ti){
     if(winP.idx.indexOf(ti)<0) return;
     if(y>660){ doc.addPage(); y=LH_TOP+10; }
     doc.setFont('helvetica','bold'); doc.setFontSize(11.5); doc.setTextColor(28,42,57);
     doc.text(tS(t.label), 54, y);
     doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(100,110,120);
-    var pc=pdfCost?termCost(t,pdfCfg):null; if(pc) pdfCostTot+=pc.total;
-    doc.text(fmtCr(Core.termCredits(t))+' créditos'+(pc?'  ·  Costo aprox. '+money(pc.total):''), 612-54, y, {align:'right'});
+    doc.text(fmtCr(Core.termCredits(t))+' créditos', 612-54, y, {align:'right'});
     doc.autoTable(Object.assign({}, TABLE_STYLE, {startY:y+6,
       head:[['Curso','Descripción','Créditos','Estado/Nota','Prerrequisito']],
       body:t.courses.map(function(c){ var eg=planElecGroup(c,curP,sgP); return [c.code, pdfSafe(c.name)+(eg?' ['+elecKind(eg)[1]+']':'')+(c.placeholder?' (por seleccionar)':''), fmtCr(c.credits), c.grade||'', pdfSafe(prereqParts(c,stPdf).map(function(p){return p.t;}).join(''))]; }),
@@ -4309,13 +4306,6 @@ function exportPlanPDF(opts){
     }));
     y=doc.lastAutoTable.finalY+24;
   });
-  if(pdfCost && pdfCostTot){
-    if(y>680){ doc.addPage(); y=LH_TOP+10; }
-    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(28,42,57); doc.text('Costo aproximado por trimestre', 54, y); y+=13;
-    doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(100,110,120);
-    doc.splitTextToSize(pdfSafe('El costo que aparece junto a cada trimestre incluye matrícula por crédito, cuota general'+(pdfCfg.parking?', estacionamiento':'')+' y cargos de laboratorio/diseño. Según '+COST_DEFAULT.source+'. No incluye otros cargos, libros, ni ayudas económicas o becas. Las tarifas pueden cambiar.'), 612-108).forEach(function(l){ doc.text(l,54,y); y+=10; });
-    y+=16;
-  }
   var missP=session.includeMissing?missingCourses():[];
   if(missP.length){
     if(y>640){ doc.addPage(); y=LH_TOP+10; }
