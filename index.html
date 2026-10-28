@@ -2669,14 +2669,11 @@ function costCatAuto(key){
   return 'eng';
 }
 function costCat(cfg){ return (cfg||costCfg()).cat[S.program] || costCatAuto(S.program); }
-/** Laboratorio: el nombre dice "Lab", o es un curso de 0-1 crédito que acompaña a otro (p. ej. COE 2300 y COE 2301). */
-var _labCodes=null, _labKey='';
+/** Laboratorio: todo curso de 0 o 1 crédito (regla de PUPR), o que diga "Lab" en el nombre. */
 function isLabCourse(c){
-  if(/\blab(oratory|oratorio)?\b/i.test(String(c.name||''))) return true;
-  if(Core.num(c.credits)>1) return false;
-  if(_labKey!==S.program){ _labKey=S.program; var cu=curr(); _labCodes=new Set(((cu&&cu.courses)||[]).map(function(x){ return x.code; })); }
-  var m=String(c.code||'').match(/^([A-Z]+)\s*(\d{4})$/); if(!m) return false;
-  var n=+m[2]; return n%2===1 && _labCodes.has(m[1]+' '+(n-1));
+  if(c.placeholder) return false;
+  if(String(c.credits).trim()!=='' && Core.num(c.credits)<=1) return true;
+  return /\blab(oratory|oratorio)?\b/i.test(String(c.name||''));
 }
 function isDesignCourse(c){ return /^(ARCH|ARIN|ARPD|ARPP)\b/i.test(String(c.code||'')) && /\b(design|diseño|studio|taller)\b/i.test(String(c.name||'')); }
 /** Costo aproximado de un trimestre del plan (null si ya está completado o vacío). */
@@ -2719,7 +2716,7 @@ function openCostSettings(){
     '</div></details>'+
     '<div class="checklist"><label><input type="checkbox" data-cpark'+(cfg.parking?' checked':'')+'><span>Sumar estacionamiento cada trimestre</span></label>'+
       '<label><input type="checkbox" data-cdes'+(cfg.design?' checked':'')+'><span>Sumar el cargo de diseño a los cursos de diseño (solo Arquitectura)</span></label></div>'+
-    '<p class="small muted">Tarifas de '+esc(COST_DEFAULT.source)+'. Los laboratorios se cuentan por los cursos que dicen "Lab" en el nombre o que acompañan a otro curso (por ejemplo, COE 2301 con COE 2300).</p>';
+    '<p class="small muted">Tarifas de '+esc(COST_DEFAULT.source)+'. Todo curso de 0 o 1 crédito se cuenta como laboratorio.</p>';
   modal({title:'Costo aproximado', narrow:true, body:body, buttons:[
     {label:'Tarifas oficiales', left:true, onClick:function(){ var c=S.costs||{}; S.costs={on:c.on, pdf:c.pdf, parking:c.parking, design:c.design, cat:c.cat}; save(); renderAll(); toast('Tarifas 2026-2027 restauradas.'); }},
     {label:'Cancelar'},
