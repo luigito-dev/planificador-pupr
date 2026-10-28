@@ -201,6 +201,8 @@ pre.raw{white-space:pre-wrap;font-size:12px;background:var(--soft);padding:12px;
 .fixfab .fx{display:inline-flex;width:20px;height:20px;border-radius:50%;background:#fff;color:var(--danger);align-items:center;justify-content:center;font-weight:800;font-size:13px}
 @keyframes fabIn{from{transform:translateY(12px);opacity:0}to{transform:none;opacity:1}}
 @media (prefers-reduced-motion:reduce){.fixfab{animation:none}}
+.draghint.termsel label{display:inline-flex;align-items:center;gap:6px;color:var(--muted)}
+.draghint.termsel select{width:auto;max-width:220px;font:inherit;font-size:13px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:var(--paper);color:var(--ink)}
 .saved-pill{position:fixed;top:72px;right:16px;z-index:59;background:var(--paper);color:var(--ok);border:1px solid var(--line);box-shadow:0 2px 10px rgba(0,0,0,.08);padding:5px 12px;border-radius:999px;font-size:13px;font-weight:600;opacity:0;transform:translateY(-6px);transition:opacity .25s,transform .25s;pointer-events:none}
 .saved-pill.show{opacity:1;transform:none}
 @media (prefers-reduced-motion:reduce){.saved-pill{transition:none}}
@@ -2731,15 +2733,15 @@ function renderPlan(){
       '<label>Clases <select id="loadCl">'+clsOpts.map(function(v){return '<option value="'+v+'"'+(v===(Core.num(pr.maxCourses)||0)?' selected':'')+'>'+(v?v:'Sin límite')+'</option>';}).join('')+'</select></label>'+
       '<label>Summer <select id="loadSu"><option value="0"'+(pr.includeSummer?'':' selected')+'>No</option><option value="1"'+(pr.includeSummer?' selected':'')+'>Sí</option></select></label>'+
       (pr.includeSummer?'<label>Créditos en Summer <select id="loadSm">'+[3,4,6,7,9,10,12,13,15].map(function(v){return '<option'+(v===Core.num(pr.summerMax)?' selected':'')+'>'+v+'</option>';}).join('')+([3,4,6,7,9,10,12,13,15].indexOf(Core.num(pr.summerMax))<0?'<option selected>'+pr.summerMax+'</option>':'')+'</select></label>':'')+
-      '<label>Trimestres a planificar <select id="loadTerms">'+[0,1,2,3,4,5,6,8,9,12].map(function(v){return '<option value="'+v+'"'+(v===(Core.num(S.planTerms)||0)?' selected':'')+'>'+(v?v:'Todos (hasta graduarse)')+'</option>';}).join('')+'</select></label></div>';
+      '</div>';
   }
-    var loadSum=pr.maxCredits+' créditos'+(Core.num(pr.maxCourses)?' · máx. '+pr.maxCourses+' clases':'')+(pr.includeSummer?' · Summer: '+(Core.num(pr.summerMax)||pr.maxCredits)+' créditos':' · sin Summer')+(Core.num(S.planTerms)?' · '+S.planTerms+' trimestres':'');
+    var loadSum=pr.maxCredits+' créditos'+(Core.num(pr.maxCourses)?' · máx. '+pr.maxCourses+' clases':'')+(pr.includeSummer?' · Summer: '+(Core.num(pr.summerMax)||pr.maxCredits)+' créditos':' · sin Summer')+'';
     html+='<div class="loadrow"><details class="loadbox" id="loadBox"'+(session.loadOpen?' open':'')+'><summary><span class="muted">Carga por trimestre:</span> <strong>'+esc(loadSum)+'</strong> <span class="chg">Cambiar</span></summary>'+loadIn+'</details>'+rvHTML+'</div>';
   if(edit && rvHTML) html+='<div class="loadrow">'+rvHTML+'</div>';
   if(S.historyChanged) html+='<div class="notice info">El plan tiene cambios manuales y el historial o las reglas cambiaron. Los cursos aprobados y las electivas ya se actualizaron. <button class="btn link" data-action="acomodar">Acomodar automáticamente</button></div>';
   var sgMap=slotGroupMap(cur), stP=Core.buildStatus(cur,S.records,S.plannerRules);
   var nPins=collectPins().n;
-  html+='<div class="pq-legend small muted"><span><i class="ldot" style="background:var(--ok)"></i>completado</span><span><i class="ldot" style="background:var(--ip)"></i>en progreso</span><span><i class="ldot" style="background:var(--pend)"></i>pendiente</span>'+(nPins||edit?'<span><span class="pin-dot" style="margin:0 4px 0 0">•</span>curso fijo'+(edit?' (toca ○ para fijar)':'')+'</span>':'')+'<span class="draghint">Arrastra una clase para moverla de trimestre</span></div>';
+  html+='<div class="pq-legend small muted"><span><i class="ldot" style="background:var(--ok)"></i>completado</span><span><i class="ldot" style="background:var(--ip)"></i>en progreso</span><span><i class="ldot" style="background:var(--pend)"></i>pendiente</span>'+(nPins||edit?'<span><span class="pin-dot" style="margin:0 4px 0 0">•</span>curso fijo'+(edit?' (toca ○ para fijar)':'')+'</span>':'')+(edit?'':'<span class="draghint termsel">'+'<label>Trimestres a planificar <select id="loadTerms">'+[0,1,2,3,4,5,6,8,9,12].map(function(v){return '<option value="'+v+'"'+(v===(Core.num(S.planTerms)||0)?' selected':'')+'>'+(v?v:'Todos (hasta graduarse)')+'</option>';}).join('')+'</select></label>'+'</span>')+'</div>';
   var win=planWindow(edit);
   // Bloques por año académico: FA y WI del año Y, SP y SU del año Y+1.
   var years=[], yIdx={};
