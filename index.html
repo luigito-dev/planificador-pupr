@@ -974,9 +974,10 @@ var Core = (function () {
           slots[slot.code] = { status: approved[hit.code] ? 'done' : 'ip', filledBy: hit.code, grade: approved[hit.code] ? approved[hit.code].grade : 'IP' };
         } else slots[slot.code] = { status: 'pending', filledBy: null, grade: '' };
       });
-      // Cursos de literatura (LITE) del transcript cuentan como electiva SOHU aunque no estén en la lista del currículo.
+      // Cursos LITE (y ECON, menos en Biomédica y Business) del transcript cuentan como electiva SOHU aunque no estén en la lista del currículo.
       var inCurr = {}; curr.courses.forEach(function (c) { inCurr[c.code] = true; });
-      var liteOf = function (pool) { return Object.keys(pool).filter(function (code) { return /^LITE\s/.test(code) && !inCurr[code] && !used[code] && num(pool[code].credits || 3) > 0; }).sort(); };
+      var sohuRe = /biomed|business/i.test(String(curr.program || '')) ? /^LITE\s/ : /^(LITE|ECON)\s/;
+      var liteOf = function (pool) { return Object.keys(pool).filter(function (code) { return sohuRe.test(code) && !inCurr[code] && !used[code] && num(pool[code].credits || 3) > 0; }).sort(); };
       curr.courses.filter(function (c) { return c.type === 'ELEC' && String(c.group).toUpperCase() === 'SOHU' && slots[c.code] && slots[c.code].status === 'pending'; }).forEach(function (slot) {
         var a = liteOf(approved)[0], i = a ? null : liteOf(ip)[0], code = a || i;
         if (!code) return;
@@ -2332,6 +2333,7 @@ function fillWithLeftovers(cur){
   function kindOf(s){ var g=String(s.group||'').toUpperCase(); return g==='SOC'?0:g==='SOHU'?1:(g==='FREE'||g==='OPEN')?2:-1; }
   slots.filter(function(s){ return kindOf(s)>=0; }).sort(function(a,b){ return kindOf(a)-kindOf(b); }).forEach(function(s){
     var k=kindOf(s), subj=k===0?SOC_SUBJ:k===1?SOHU_SUBJ:null;
+    if(k===1 && /biomed|business/i.test(String(cur.program||''))) subj=SOHU_SUBJ.filter(function(x){ return x!=='ECON'; });
     var fit=left.filter(function(x){ return x.credits>=s.credits && (!subj || subj.indexOf(x.code.split(' ')[0])>=0); })
       .sort(function(a,b){ return (lang(a)-lang(b)) || (a.credits-b.credits); })[0];
     if(!fit) return;
