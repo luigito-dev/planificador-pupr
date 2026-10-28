@@ -978,14 +978,19 @@ var Core = (function () {
       });
       // Cursos LITE (y ECON, menos en Biomédica y Business) del transcript cuentan como electiva SOHU aunque no estén en la lista del currículo.
       var inCurr = {}; curr.courses.forEach(function (c) { inCurr[c.code] = true; });
-      var sohuRe = /biomed|business/i.test(String(curr.program || '')) ? /^LITE\s/ : /^(LITE|ECON)\s/;
-      var liteOf = function (pool) { return Object.keys(pool).filter(function (code) { return sohuRe.test(code) && !inCurr[code] && !used[code] && num(pool[code].credits || 3) > 0; }).sort(); };
-      curr.courses.filter(function (c) { return c.type === 'ELEC' && String(c.group).toUpperCase() === 'SOHU' && slots[c.code] && slots[c.code].status === 'pending'; }).forEach(function (slot) {
-        var a = liteOf(approved)[0], i = a ? null : liteOf(ip)[0], code = a || i;
+      // HIST también cuenta como SOHU y como electiva libre.
+      var sohuRe = /biomed|business/i.test(String(curr.program || '')) ? /^(LITE|HIST)\s/ : /^(LITE|ECON|HIST)\s/;
+      var freeRe = /^HIST\s/;
+      var pick = function (pool, re) { return Object.keys(pool).filter(function (code) { return re.test(code) && !inCurr[code] && !used[code] && num(pool[code].credits || 3) > 0; }).sort(); };
+      var extraFill = [['SOHU', sohuRe], ['FREE', freeRe], ['OPEN', freeRe]];
+      extraFill.forEach(function (ef) {
+      curr.courses.filter(function (c) { return c.type === 'ELEC' && String(c.group).toUpperCase() === ef[0] && slots[c.code] && slots[c.code].status === 'pending'; }).forEach(function (slot) {
+        var a = pick(approved, ef[1])[0], i = a ? null : pick(ip, ef[1])[0], code = a || i;
         if (!code) return;
         used[code] = true;
         var rr = (a ? approved : ip)[code] || {};
         slots[slot.code] = { status: a ? 'done' : 'ip', filledBy: code, grade: a ? approved[code].grade : 'IP', credits: num(rr.credits) || slot.credits, name: rr.title || rr.name || '' };
+      });
       });
     }
     return {
@@ -2669,7 +2674,7 @@ function wizardHTML(){
     '</ol><p class="small muted" style="margin:10px 0 0">¿Dudas? Toca <strong>Ayuda</strong> arriba a la derecha.</p></div>';
 }
 /* ---------------- Ayuda ---------------- */
-var APP_VERSION='28 oct 2026 · 5:40 pm';
+var APP_VERSION='28 oct 2026 · 5:45 pm';
 function openHelp(){
   var sec=function(t,items){ return '<h4 style="margin:16px 0 6px">'+t+'</h4><ul style="margin:0;padding-left:20px">'+items.map(function(i){return '<li style="margin:4px 0">'+i+'</li>';}).join('')+'</ul>'; };
   var body='<p style="margin-top:0">El planificador arma el plan de estudios de cada estudiante, trimestre por trimestre, siguiendo los prerrequisitos y las reglas de PUPR.</p>'+
