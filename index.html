@@ -881,7 +881,7 @@ var Core = (function () {
   var DEFAULT_PLANNER_RULES = {
     startSeason: 'Fall', startYear: 2026,
     maxCredits: 12, maxCourses: 0, minCredits: 6, summerMax: 12, includeSummer: false,   // Summer no se incluye por defecto
-    finalLoadMax: 9, capWindowCredits: 18,
+    finalLoadMax: 0, capWindowCredits: 18,   // 0 = el trimestre del capstone lleva la misma carga que los demás
     prioritySubjects: 'MATH, SPAN, ENGL',
     onePerTermSubjects: 'MATH',   // nunca dos cursos de estas materias en el mismo trimestre
     minGradeForReq: 'D',
@@ -1138,14 +1138,14 @@ var Core = (function () {
         var remainingNonCap = sum(pending.filter(function (u) { return u.type !== 'CAP'; }), function (u) { return u.credits; });
         // Ventana del proyecto: lo que cabe junto a los proyectos pendientes con carga final reducida,
         // para que no queden cursos sueltos después del último proyecto.
-        var capRoom = sum(pending.filter(function (u) { return u.type === 'CAP'; }), function (u) { return Math.max(0, pr.finalLoadMax - u.credits); });
+        var capRoom = sum(pending.filter(function (u) { return u.type === 'CAP'; }), function (u) { return Math.max(0, (num(pr.finalLoadMax) || pr.maxCredits) - u.credits); });
         var capWindow = Math.min(pr.capWindowCredits, capRoom);
         // Una vez comenzado el proyecto (p. ej. Capstone I), los siguientes van sin esperar.
         if (terms.some(function (tt) { return tt.courses.some(function (c) { return c.type === 'CAP'; }); })) capWindow = Infinity;
         pending.filter(function (u) { return u.type === 'CAP' && eligible(u) && remainingNonCap <= capWindow; })
           .sort(cmp).forEach(function (u) {
             if (placed.indexOf(u) >= 0) return;
-            var capLim = Math.min(cap, pr.finalLoadMax);
+            var capLim = capLoad(cap, pr);
             // Correquisitos del proyecto (p. ej. ME 4992 con ENGI 2260): antes o en el mismo trimestre.
             var bundle = [u], ok = true;
             (u.coreqs || []).forEach(function (ors) {
@@ -1239,8 +1239,10 @@ var Core = (function () {
   }
   function termLimit(term, pr) {
     var cap = termCap(term, pr);
-    return term.courses.some(function (c) { return c.type === 'CAP'; }) ? Math.min(cap, pr.finalLoadMax) : cap;
+    return term.courses.some(function (c) { return c.type === 'CAP'; }) ? capLoad(cap, pr) : cap;
   }
+  /** Carga del trimestre con capstone: igual que los demás, salvo que se ponga un máximo en Ajustes. */
+  function capLoad(cap, pr) { var f = num(pr.finalLoadMax); return f > 0 ? Math.min(cap, f) : cap; }
   function termCredits(term) { return sum(term.courses, function (c) { return num(c.credits); }); }
 
   /** Evita trimestres pequeños (p. ej. un curso de 1 crédito) si hay una alternativa válida. */
@@ -1257,7 +1259,7 @@ var Core = (function () {
           for (var j = k - 1; j >= 0; j--) {
             var tj = plan.terms[j];
             if (pr.ipTermOnly !== false && tj.courses.some(function (x) { return x.fixed || x.grade === 'IP'; })) continue;
-            var lim = c.type === 'CAP' ? Math.min(termCap(tj, pr), pr.finalLoadMax) : termLimit(tj, pr);
+            var lim = c.type === 'CAP' ? capLoad(termCap(tj, pr), pr) : termLimit(tj, pr);
             if (termCredits(tj) + num(c.credits) > lim) continue;
             if (!fitsCourses(tj, pr, tj.courses, [c])) continue;
             if (subjectClash(tj.courses, [c], pr)) continue;
@@ -1377,7 +1379,7 @@ var Core = (function () {
         if (!stages[j].every(function (c) { return offeredIn(c, terms[s].season); })) return null;
         slots[s] = stages[j].slice();
       }
-      function lim(s) { var cap = termCap(terms[s], pr); return slots[s].some(isCap) ? Math.min(cap, pr.finalLoadMax) : cap; }
+      function lim(s) { var cap = termCap(terms[s], pr); return slots[s].some(isCap) ? capLoad(cap, pr) : cap; }
       function doneBefore(s) { var d = new Set(base); for (var q = 0; q < s; q++) slots[q].forEach(function (c) { d.add(c.code); }); return d; }
       for (var bi = 0; bi < order.length; bi++) {
         var b = order[bi], add = sum(b, function (c) { return num(c.credits); }), placed = false;
@@ -1516,16 +1518,18 @@ function defaultState(){
     curricula:{}, gpaRules:JSON.parse(JSON.stringify(Core.DEFAULT_GPA_RULES)),
     plannerRules:Object.assign({}, Core.DEFAULT_PLANNER_RULES),
     electiveSel:{}, planOriginal:null, plan:null, planEdited:false, historyChanged:false,
-    transcriptText:'', transcriptName:'', prepExempt:{}, customOptions:{}, programBase:'', roster:{}, currentId:Core.uid(), offerOverrides:{}, useOfficialGPA:false, gpaOverride:null, summerOffMigrated:true, prevLoad:null
+    transcriptText:'', transcriptName:'', prepExempt:{}, customOptions:{}, programBase:'', roster:{}, currentId:Core.uid(), offerOverrides:{}, useOfficialGPA:false, gpaOverride:null, summerOffMigrated:true, capLoadMigrated:true, prevLoad:null
   };
 }
 function load(){
   try{ var raw = localStorage.getItem(STORE); if(!raw) return null;
-    var s = JSON.parse(raw); var needSummerOff = !s.summerOffMigrated; var d = defaultState();
+    var s = JSON.parse(raw); var needSummerOff = !s.summerOffMigrated; var needCapLoad = !s.capLoadMigrated; var d = defaultState();
     Object.keys(d).forEach(function(k){ if(!(k in s)) s[k]=d[k]; });
     s.plannerRules = Object.assign({}, Core.DEFAULT_PLANNER_RULES, s.plannerRules||{});
     // Reglas internas (no se ven ni se editan): probatoria y nota mínima D.
     ['minGPA','gpaWarn','minRate','rateWarn','minGradeForReq'].forEach(function(k){ s.plannerRules[k]=Core.DEFAULT_PLANNER_RULES[k]; });
+    // El capstone pasa a tener la misma carga que los demás trimestres (una sola vez para datos guardados antes)
+    if(needCapLoad){ s.plannerRules.finalLoadMax=0; s.capLoadMigrated=true; }
     // Summer pasa a estar desactivado por defecto (una sola vez para datos guardados antes)
     if(needSummerOff){
       s.plannerRules.includeSummer=false; s.summerOffMigrated=true; s._summerRegen=true;
@@ -4203,7 +4207,7 @@ function openSettings(){
     '<label class="field">Mínimo por trimestre (beca)<input data-s="minCredits" inputmode="numeric" value="'+p.minCredits+'"></label>'+
     '<label class="field">Máximo en Summer<input data-s="summerMax" inputmode="numeric" value="'+p.summerMax+'"></label>'+
     '</div><details class="more"><summary>Reglas del planificador</summary><div class="grid2">'+
-    '<label class="field">Carga máxima con proyecto/capstone<input data-s="finalLoadMax" inputmode="numeric" value="'+p.finalLoadMax+'"></label>'+
+    '<label class="field">Carga máxima con proyecto/capstone<input data-s="finalLoadMax" inputmode="numeric" value="'+(Core.num(p.finalLoadMax)||'')+'" placeholder="Igual que los demás trimestres"></label>'+
     '<label class="field">Proyecto cuando falten ≤ créditos<input data-s="capWindowCredits" inputmode="numeric" value="'+p.capWindowCredits+'"></label>'+
     '<label class="field">Materias con prioridad<input data-s="prioritySubjects" value="'+esc(p.prioritySubjects)+'"></label>'+
     '<label class="field">Solo un curso por trimestre de<input data-s="onePerTermSubjects" value="'+esc(p.onePerTermSubjects||'')+'" placeholder="MATH"></label>'+
@@ -4215,7 +4219,7 @@ function openSettings(){
     var v=function(k){ return b.querySelector('[data-s="'+k+'"]').value; };
     var np={ startSeason:v('startSeason'), startYear:parseInt(v('startYear'),10)||2026,
       minCredits:Core.num(v('minCredits')), summerMax:Core.num(v('summerMax'))||12,
-      finalLoadMax:Core.num(v('finalLoadMax'))||9, capWindowCredits:Core.num(v('capWindowCredits')), prioritySubjects:v('prioritySubjects'), onePerTermSubjects:v('onePerTermSubjects'), ipTermOnly:v('ipTermOnly')==='1', capstoneLast:v('capstoneLast')==='1' };
+      finalLoadMax:Core.num(v('finalLoadMax'))||0, capWindowCredits:Core.num(v('capWindowCredits')), prioritySubjects:v('prioritySubjects'), onePerTermSubjects:v('onePerTermSubjects'), ipTermOnly:v('ipTermOnly')==='1', capstoneLast:v('capstoneLast')==='1' };
     var changed=JSON.stringify(np)!==JSON.stringify(Object.assign({},S.plannerRules,np)) || Object.keys(np).some(function(k){return S.plannerRules[k]!==np[k];});
     S.plannerRules=Object.assign({},S.plannerRules,np);
     save();
