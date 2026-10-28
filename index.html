@@ -166,7 +166,8 @@ h4.sec{font-size:15px;font-weight:600;margin:26px 0 8px}
 .modal footer .left{margin-right:auto}
 .field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px;font-size:13px;color:var(--muted)}
 .field input,.field select{color:var(--ink)}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 14px}
+.grid2 .field input,.grid2 .field select{min-width:0;width:100%;box-sizing:border-box}
 .checklist label{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}
 .checklist label.dis{opacity:.55}
 .pdfpage{display:block;max-width:100%;margin:0 auto 12px;border:1px solid var(--line)}
@@ -2721,6 +2722,7 @@ function renderPlan(){
       '<div class="menu"><button class="btn ghost" data-action="menu" aria-haspopup="true" aria-expanded="false">Más ▾</button><div class="menu-list" role="menu">'+
 
         (planWindow(edit).limited?'<button role="menuitem" data-action="add-term">Agregar trimestre</button>':'')+
+        '<button role="menuitem" data-action="cost-settings">Tarifas</button><hr>'+
         '<button role="menuitem" data-action="blank-plan">Empezar plan en blanco</button>'+
         '<button role="menuitem" data-action="regen-fresh">Hacer el plan de cero</button>'+
       '</div></div></div>';
@@ -2750,7 +2752,7 @@ function renderPlan(){
   html+='<div class="years'+(edit?' editing':'')+'">';
   years.forEach(function(y, yi){
     var ycr=y.terms.reduce(function(s,ti){ return s+Core.termCredits(S.plan.terms[ti]); },0);
-    html+='<section class="yearblock"><div class="yh"><h3>Año '+(yi+1)+'</h3><span class="muted">'+y.ay+'–'+(y.ay+1)+'</span>'+(yi===0?'<span class="ypills"><button class="spill act" data-action="fastest" title="Compara cuánto se acorta el plan con más créditos o con Summer">Terminar antes</button><button class="spill'+(cOn?' on':'')+'" data-action="cost-toggle" aria-pressed="'+(cOn?'true':'false')+'" title="'+(cOn?'Ocultar':'Mostrar')+' el costo aproximado">COSTOS</button>'+(cOn?'<button class="btn link small" data-action="cost-settings" title="Cambiar tarifas">Tarifas</button>':'')+'</span>':'')+'<span class="ycr">'+fmtCr(ycr)+' créditos</span></div><div class="ygrid'+(pr.includeSummer||y.terms.length>3?' four':'')+'">';
+    html+='<section class="yearblock"><div class="yh"><h3>Año '+(yi+1)+'</h3><span class="muted">'+y.ay+'–'+(y.ay+1)+'</span>'+(yi===0?'<span class="ypills"><button class="spill act" data-action="fastest" title="Compara cuánto se acorta el plan con más créditos o con Summer">Terminar antes</button><button class="spill'+(cOn?' on':'')+'" data-action="cost-toggle" aria-pressed="'+(cOn?'true':'false')+'" title="'+(cOn?'Ocultar':'Mostrar')+' el costo aproximado">COSTOS</button>'+'</span>':'')+'<span class="ycr">'+fmtCr(ycr)+' créditos</span></div><div class="ygrid'+(pr.includeSummer||y.terms.length>3?' four':'')+'">';
     y.terms.forEach(function(ti){
       var t=S.plan.terms[ti];
       var cr=Core.termCredits(t), cap=Core.termCap(t,pr), flag='';
@@ -2833,40 +2835,39 @@ function costRows(r){
   if(r.nDes) L.push([r.nDes+' curso'+(r.nDes>1?'s':'')+' de diseño × '+money(r.design/r.nDes), money(r.design)]);
   return L;
 }
+function costSourceText(){ var c=S.costs||{}; return c.updated ? 'las tarifas oficiales actualizadas el '+c.updated : COST_DEFAULT.source; }
 function openTermCost(ti){
   var t=S.plan.terms[ti], r=t&&termCost(t); if(!r) return;
   modal({title:'Costo aproximado · '+tS(t.label), narrow:true, body:'<table class="plain">'+costRows(r).map(function(p){ return '<tr><td>'+esc(p[0])+'</td><td class="num">'+esc(p[1])+'</td></tr>'; }).join('')+
     '<tr><td><strong>Total aproximado</strong></td><td class="num"><strong>'+money(r.total)+'</strong></td></tr></table>'+
-    '<p class="small muted">Aproximado según '+esc(COST_DEFAULT.source)+'. No incluye otros cargos, libros, ni ayudas económicas o becas. Las tarifas pueden cambiar.</p>',
-    buttons:[{label:'Cambiar tarifas', left:true, onClick:function(){ setTimeout(openCostSettings,0); }},{label:'Cerrar',primary:true}]});
+    '<p class="small muted">Aproximado según '+esc(costSourceText())+'. No incluye otros cargos, libros, ni ayudas económicas o becas.</p>',
+    buttons:[{label:'Cerrar',primary:true}]});
 }
+/** Más → Tarifas: lo que se guarda aquí pasa a ser la tarifa oficial que usa la app. */
 function openCostSettings(){
   var cfg=costCfg(), cat=costCat(cfg);
   var num=function(k,label,v){ return '<label class="field">'+label+'<input data-ck="'+k+'" inputmode="decimal" value="'+v+'"></label>'; };
-  var body='<div class="checklist" style="margin-bottom:10px"><label><input type="checkbox" data-con'+(cfg.on?' checked':'')+'><span><strong>Mostrar el costo aproximado de cada trimestre</strong><br><span class="small muted">Sale en cada trimestre del plan. Es opcional y lo puedes apagar cuando quieras.</span></span></label>'+
-      '</div><p class="small muted" style="margin:-4px 0 10px">Es solo una referencia para ver en la app. No sale en los PDF ni en el correo.</p>'+
-    '<label class="field">Tarifa por crédito para '+esc(programName(S.program)||'este programa')+'<select data-ccat>'+COST_CATS.map(function(c){ return '<option value="'+c[0]+'"'+(c[0]===cat?' selected':'')+'>'+c[1]+' ('+money(cfg.rates[c[0]])+')</option>'; }).join('')+'</select></label>'+
-    '<details style="margin:6px 0 10px"><summary class="small">Ver o cambiar las tarifas</summary><div class="grid2" style="margin-top:8px">'+
+  var body='<label class="field">Tarifa por crédito para '+esc(programName(S.program)||'este programa')+'<select data-ccat>'+COST_CATS.map(function(c){ return '<option value="'+c[0]+'"'+(c[0]===cat?' selected':'')+'>'+c[1]+' ('+money(cfg.rates[c[0]])+')</option>'; }).join('')+'</select></label>'+
+    '<div class="grid2" style="margin-top:8px">'+
       COST_CATS.map(function(c){ return num('r_'+c[0], 'Crédito · '+c[1], cfg.rates[c[0]]); }).join('')+
       num('generalFee','Cuota general (trimestre)',cfg.generalFee)+num('generalFeeSummer','Cuota general (Summer)',cfg.generalFeeSummer)+
       num('labFee','Cargo por laboratorio',cfg.labFee)+num('designFee','Cargo de diseño (Arquitectura)',cfg.designFee)+
-    '</div></details>'+
-    '<div class="checklist">'+
-      '<label><input type="checkbox" data-cdes'+(cfg.design?' checked':'')+'><span>Sumar el cargo de diseño a los cursos de diseño (solo Arquitectura)</span></label></div>'+
-    '<p class="small muted">Tarifas de '+esc(COST_DEFAULT.source)+'. Todo curso de 0 o 1 crédito se cuenta como laboratorio.</p>';
-  modal({title:'Costo aproximado', narrow:true, body:body, buttons:[
-    {label:'Tarifas oficiales', left:true, onClick:function(){ var c=S.costs||{}; S.costs={on:c.on, design:c.design, cat:c.cat}; save(); renderAll(); toast('Tarifas 2026-2027 restauradas.'); }},
+    '</div>'+
+    '<div class="checklist"><label><input type="checkbox" data-cdes'+(cfg.design?' checked':'')+'><span>Sumar el cargo de diseño a los cursos de diseño (solo Arquitectura)</span></label></div>'+
+    '<p class="small muted" style="margin-bottom:0">Vigentes: '+esc(costSourceText())+'.</p>';
+  modal({title:'Tarifas', narrow:true, body:body, buttons:[
     {label:'Cancelar'},
     {label:'Guardar', primary:true, onClick:function(b){
-      var c=S.costs=S.costs||{}; c.on=b.querySelector('[data-con]').checked; delete c.pdf; delete c.parking; delete c.parkingFee;
+      var c=S.costs=S.costs||{}; delete c.pdf; delete c.parking; delete c.parkingFee;
       c.design=b.querySelector('[data-cdes]').checked;
       c.rates=c.rates||{}; c.cat=c.cat||{};
-      b.querySelectorAll('[data-ck]').forEach(function(i){ var k=i.getAttribute('data-ck'), v=Core.num(i.value); if(k.indexOf('r_')===0) c.rates[k.slice(2)]=v; else c[k]=v; });
+      var changed=false;
+      b.querySelectorAll('[data-ck]').forEach(function(i){ var k=i.getAttribute('data-ck'), v=Core.num(i.value), old=k.indexOf('r_')===0?cfg.rates[k.slice(2)]:cfg[k]; if(Core.num(old)!==v) changed=true; if(k.indexOf('r_')===0) c.rates[k.slice(2)]=v; else c[k]=v; });
+      if(changed) c.updated=fechaHoy();
       var sel=b.querySelector('[data-ccat]').value; if(sel===costCatAuto(S.program)) delete c.cat[S.program]; else c.cat[S.program]=sel;
-      save(); renderAll(); toast(c.on?'Costo aproximado visible en el plan.':'Costo aproximado oculto.');
+      save(); renderAll(); toast(changed?'Tarifas oficiales actualizadas.':'Tarifas guardadas.');
     }}]});
 }
-
 
 /* ---------------- Corregir cursos mal ubicados ---------------- */
 function planBaseDone(){ var cu=curr(); if(!cu) return []; var st=Core.buildStatus(cu,S.records,S.plannerRules); return st.approvedCodes.concat(exemptList()); }
