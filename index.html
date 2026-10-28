@@ -194,6 +194,12 @@ pre.raw{white-space:pre-wrap;font-size:12px;background:var(--soft);padding:12px;
 .pqpop.done{border-left-color:var(--ok)} .pqpop.ip{border-left-color:var(--ip)} .pqpop.pend{border-left-color:var(--pend)} .pqpop.no{border-left-color:var(--danger)}
 .pqpop .pqc{font-weight:700} .pqpop .pqr{margin-top:6px;padding-top:6px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted)} .pqpop .pqr strong{color:var(--ink)} .pqno{color:var(--danger)} .pqpop .pqn{color:var(--muted);font-size:12.5px;margin-bottom:3px}
 @keyframes pqIn{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:none}}
+.crow.misplaced{border-color:var(--danger);background:color-mix(in srgb,var(--danger) 7%,var(--paper))}
+.fixfab{position:fixed;right:20px;bottom:calc(22px + env(safe-area-inset-bottom,0px));z-index:58;display:inline-flex;align-items:center;gap:8px;padding:11px 18px;border:0;border-radius:999px;background:var(--danger);color:#fff;font:inherit;font-weight:700;font-size:14.5px;box-shadow:0 6px 18px rgba(163,38,47,.35);cursor:pointer;animation:fabIn .2s ease-out}
+.fixfab:hover{filter:brightness(1.07)}
+.fixfab .fx{display:inline-flex;width:20px;height:20px;border-radius:50%;background:#fff;color:var(--danger);align-items:center;justify-content:center;font-weight:800;font-size:13px}
+@keyframes fabIn{from{transform:translateY(12px);opacity:0}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){.fixfab{animation:none}}
 .saved-pill{position:fixed;top:72px;right:16px;z-index:59;background:var(--paper);color:var(--ok);border:1px solid var(--line);box-shadow:0 2px 10px rgba(0,0,0,.08);padding:5px 12px;border-radius:999px;font-size:13px;font-weight:600;opacity:0;transform:translateY(-6px);transition:opacity .25s,transform .25s;pointer-events:none}
 .saved-pill.show{opacity:1;transform:none}
 @media (prefers-reduced-motion:reduce){.saved-pill{transition:none}}
@@ -1470,6 +1476,61 @@ var Core = (function () {
   function withWhere(plan, ors, skipUid) {
     return ors.map(function (c) { var w = whereIs(plan, c, skipUid); return w ? c + ' (planificado en ' + w + ')' : c; }).join(' o ');
   }
+
+  /* Cursos mal ubicados: están antes que un prerrequisito (o correquisito) que también está en el plan. */
+  function termIndexOf(plan, code) { for (var i = 0; i < plan.terms.length; i++) if (plan.terms[i].courses.some(function (c) { return c.code === code; })) return i; return -1; }
+  function misplacedCourses(plan, baseDone) {
+    var base = new Set(baseDone), out = [];
+    plan.terms.forEach(function (t, i) {
+      var before = doneBeforeIndex(plan, i, baseDone), here = new Set(t.courses.map(function (c) { return c.code; }));
+      t.courses.forEach(function (c) {
+        if (c.fixed || (c.grade && c.grade !== '') || base.has(c.code)) return;
+        var need = -1, why = [];
+        (c.prereqs || []).forEach(function (ors) {
+          if (ors.some(function (x) { return before.has(x); })) return;
+          var idx = ors.map(function (x) { return termIndexOf(plan, x); }).filter(function (k) { return k >= i; });
+          if (!idx.length) return;                       // el prerrequisito no está en el plan: moverlo no lo arregla
+          var k = Math.min.apply(null, idx); need = Math.max(need, k + 1); why.push(ors.join(' o '));
+        });
+        (c.coreqs || []).forEach(function (ors) {
+          if (ors.some(function (x) { return before.has(x) || here.has(x); })) return;
+          var idx = ors.map(function (x) { return termIndexOf(plan, x); }).filter(function (k) { return k > i; });
+          if (!idx.length) return;
+          var k = Math.min.apply(null, idx); need = Math.max(need, k); why.push(ors.join(' o ') + ' (correquisito)');
+        });
+        if (need > i) out.push({ uid: c.uid, code: c.code, ti: i, need: need, why: why });
+      });
+    });
+    return out;
+  }
+  /** Mueve cada curso mal ubicado al primer trimestre donde ya cumple sus requisitos y cabe en la carga. */
+  function fixMisplaced(plan, baseDone, pr) {
+    var moved = [], guard = 0, list;
+    while ((list = misplacedCourses(plan, baseDone)).length && guard++ < 80) {
+      var m = list[0], from = plan.terms[m.ti], c = from.courses.filter(function (x) { return x.uid === m.uid; })[0];
+      if (!c) break;
+      from.courses.splice(from.courses.indexOf(c), 1);
+      var placed = -1;
+      for (var j = m.need; j < plan.terms.length && placed < 0; j++) {
+        var tj = plan.terms[j];
+        if (pr.ipTermOnly !== false && tj.courses.some(function (x) { return x.fixed || x.grade === 'IP'; })) continue;
+        if (!offeredIn(c, tj.season)) continue;
+        if (termCredits(tj) + num(c.credits) > termLimit(tj, pr)) continue;
+        if (!fitsCourses(tj, pr, tj.courses, [c])) continue;
+        if (!prereqOK(c, doneBeforeIndex(plan, j, baseDone))) continue;
+        placed = j;
+      }
+      if (placed < 0) {
+        var lt = plan.terms[plan.terms.length - 1], nt = Terms.next({ season: lt.season, year: lt.year }, pr.includeSummer);
+        plan.terms.push({ season: nt.season, year: nt.year, label: Terms.label(nt), courses: [] });
+        placed = Math.max(m.need, plan.terms.length - 1);
+        while (placed >= plan.terms.length) { lt = plan.terms[plan.terms.length - 1]; nt = Terms.next({ season: lt.season, year: lt.year }, pr.includeSummer); plan.terms.push({ season: nt.season, year: nt.year, label: Terms.label(nt), courses: [] }); }
+      }
+      plan.terms[placed].courses.push(c);
+      moved.push({ code: c.code, from: from.label, to: plan.terms[placed].label });
+    }
+    return moved;
+  }
   function validatePlacement(plan, course, targetIdx, baseDone, pr) {
     var warnings = [];
     var before = doneBeforeIndex(plan, targetIdx, baseDone);
@@ -1528,7 +1589,7 @@ var Core = (function () {
     round2: round2, trunc2: trunc2,
     parseTranscriptText: parseTranscriptText, parseCurriculum: parseCurriculum, draftCurriculumFromText: draftCurriculumFromText,
     buildStatus: buildStatus, EQUIVALENTS: EQUIVALENTS, generatePlan: generatePlan, validatePlacement: validatePlacement,
-    termCredits: termCredits, termCap: termCap, termCourseCap: termCourseCap, classCount: classCount, parseOffer: parseOffer, offeredIn: offeredIn, subjectClash: subjectClash, limitedSubjects: limitedSubjects, doneBeforeIndex: doneBeforeIndex, relabel: relabel, missingPrereqs: missingPrereqs, whereIs: whereIs, withWhere: withWhere
+    termCredits: termCredits, termCap: termCap, termCourseCap: termCourseCap, classCount: classCount, parseOffer: parseOffer, offeredIn: offeredIn, subjectClash: subjectClash, limitedSubjects: limitedSubjects, doneBeforeIndex: doneBeforeIndex, relabel: relabel, misplacedCourses: misplacedCourses, fixMisplaced: fixMisplaced, missingPrereqs: missingPrereqs, whereIs: whereIs, withWhere: withWhere
   };
 })();
 if (typeof module !== 'undefined') module.exports = Core;
@@ -2723,6 +2784,7 @@ function renderPlan(){
   if(!win.limited) html+='<button class="btn" data-action="add-term" style="margin-top:14px">+ Agregar trimestre</button>';
   if(S.plan.unscheduled.length) html+='<p class="small muted">* La fecha estimada no incluye los cursos que no se pudieron ubicar.</p>';
   el.innerHTML=html;
+  updateFixButton();
 }
 
 
@@ -2805,6 +2867,29 @@ function openCostSettings(){
     }}]});
 }
 
+
+/* ---------------- Corregir cursos mal ubicados ---------------- */
+function planBaseDone(){ var cu=curr(); if(!cu) return []; var st=Core.buildStatus(cu,S.records,S.plannerRules); return st.approvedCodes.concat(exemptList()); }
+function updateFixButton(){
+  var old=document.getElementById('fixFab');
+  var list=(session.tab==='plan' && S.plan && curr()) ? Core.misplacedCourses(S.plan, planBaseDone()) : [];
+  document.querySelectorAll('.crow.misplaced').forEach(function(r){ r.classList.remove('misplaced'); });
+  list.forEach(function(m){ var r=document.querySelector('.crow[data-uid="'+m.uid+'"]'); if(r){ r.classList.add('misplaced'); r.title=m.code+' está antes de '+m.why.join(', '); } });
+  if(!list.length){ if(old) old.remove(); return; }
+  if(!old){ old=document.createElement('button'); old.id='fixFab'; old.className='fixfab'; old.setAttribute('data-action','fix-plan'); document.body.appendChild(old); }
+  old.title=list.map(function(m){ return m.code+' está antes de '+m.why.join(', '); }).join('\n');
+  old.innerHTML='<span class="fx">!</span> Corregir'+(list.length>1?' ('+list.length+')':'');
+}
+function fixPlan(){
+  if(!S.plan) return;
+  var prev=clone(S.plan), moved=Core.fixMisplaced(S.plan, planBaseDone(), prEff());
+  if(!moved.length){ toast('No hay cursos por corregir.'); updateFixButton(); return; }
+  // quita trimestres vacíos que hayan quedado al final
+  while(S.plan.terms.length && !S.plan.terms[S.plan.terms.length-1].courses.length) S.plan.terms.pop();
+  S.planBeforeFill=prev; S.planEdited=true; save(); renderAll();
+  var msg=moved.slice(0,3).map(function(m){ return m.code+' → '+tS(m.to); }).join(', ')+(moved.length>3?' y '+(moved.length-3)+' más':'');
+  toast('Corregido: '+msg+'. Puedes deshacerlo con Restaurar.');
+}
 /* ---------------- Resumen del plan para enviar por correo ---------------- */
 function planSummaryText(){
   var a=academicSummary(), win=planWindow(false), sg=Object.assign({}, SIGNER_DEFAULT, S.signer||{});
@@ -2940,6 +3025,7 @@ function gradeOptions(sel, allowBlank){
 function renderAll(){
   renderStudent(); renderTabs();
   if(session.tab==='hist') renderHistory(); else if(session.tab==='notes') renderNotes(); else renderPlan();
+  updateFixButton();
 }
 
 /* ---------------- Editores (modales) ---------------- */
@@ -4616,6 +4702,7 @@ document.addEventListener('click',function(e){
   else if(a==='cost-settings') openCostSettings();
   else if(a==='cost-toggle'){ S.costs=S.costs||{}; S.costs.on=!S.costs.on; save(); renderPlan(); }
   else if(a==='review-open') openAlertsList();
+  else if(a==='fix-plan') fixPlan();
   else if(a==='alerts-list') openAlertsList();
   else if(a==='del-term') openDeleteTerm(+btn.closest('.term').getAttribute('data-term'));
   else if(a==='add-course') openAddCourse(+btn.closest('.term').getAttribute('data-term'));
