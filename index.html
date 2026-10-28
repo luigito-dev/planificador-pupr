@@ -209,8 +209,8 @@ pre.raw{white-space:pre-wrap;font-size:12px;background:var(--soft);padding:12px;
 .stid{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:14px;color:var(--muted)}
 .stid input{font-size:14px;padding:4px 8px;width:160px;color:var(--ink)}
 /* GPA editable en el encabezado */
-.gpa-inline{font:inherit;font-size:24px;font-weight:600;width:96px;padding:0 4px;margin-left:-5px;border:1px solid transparent;border-radius:6px;background:none;color:var(--ink)}
-.gpa-inline:hover{border-color:var(--line)} .gpa-inline:focus{border-color:var(--accent);outline:none}
+.gpa-inline{font:inherit;font-size:24px;font-weight:600;width:96px;padding:0 4px;margin-left:-5px;border:1px solid transparent;border-bottom:1px dashed var(--muted);border-radius:6px 6px 0 0;background:none;color:var(--ink);cursor:text}
+.gpa-inline:hover{border-color:var(--line);border-radius:6px} .gpa-inline:focus{border-color:var(--accent);outline:none}
 @media (max-width:680px){ .gpa-inline{font-size:20px} }
 /* Carga por trimestre */
 .loadbar{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;font-size:14px;margin:0 0 12px;padding:10px 12px;background:var(--soft);border-radius:8px}
@@ -2399,11 +2399,11 @@ function renderStudent(){
     '<div class="stid"><label for="stId">Número de estudiante</label><input id="stId" value="'+esc(S.student.id||'')+'" placeholder="Ej. 12345" autocomplete="off" inputmode="numeric"></div>'+
     '</div>'+
     '<dl class="facts">'+
-      '<div><dt><label for="gpaEdit">GPA</label></dt><dd><input id="gpaEdit" class="gpa-inline" inputmode="decimal" value="'+(a.gpa==null?'':fmt(a.gpa))+'" placeholder="—" title="Toca para editar el GPA">'+
-        (a.gpaEdited?'<small style="display:block">editado · <button class="btn link small" style="padding:0" data-action="gpa-calc">restaurar</button></small>':'<small style="display:block">toca para editar</small>')+'</dd></div>'+
-      '<div><dt>Aprobados</dt><dd>'+fmtCr(a.earned)+(a.earnedPrep?' <small>+'+fmtCr(a.earnedPrep)+' prep.</small>':'')+'</dd></div>'+
-      '<div><dt>Pendientes</dt><dd>'+(a.pending==null?'—':fmtCr(a.pending))+'</dd></div>'+
-      '<div><dt>Graduación</dt><dd>'+esc(a.grad)+'</dd></div>'+
+      '<div><dt><label for="gpaEdit">GPA</label></dt><dd><input id="gpaEdit" class="gpa-inline" inputmode="decimal" value="'+(a.gpa==null?'':fmt(a.gpa))+'" placeholder="—" title="Escribe o cambia el GPA" aria-label="GPA (se puede editar)">'+
+        (a.gpaEdited?'<small style="display:block">editado · <button class="btn link small" style="padding:0" data-action="gpa-calc">restaurar</button></small>':'')+'</dd></div>'+
+      '<div><dt>Créditos aprobados</dt><dd>'+fmtCr(a.earned)+(a.earnedPrep?' <small>+'+fmtCr(a.earnedPrep)+' prep.</small>':'')+'</dd></div>'+
+      '<div><dt>Créditos pendientes</dt><dd>'+(a.pending==null?'—':fmtCr(a.pending))+'</dd></div>'+
+      '<div><dt>Graduación estimada</dt><dd>'+esc(a.grad)+'</dd></div>'+
     '</dl>'+
     '</div>'+
     '<div class="meta"><span><label for="programSel">Programa </label><select id="programSel"><option value="">Selecciona un programa</option>'+
@@ -2666,7 +2666,7 @@ function renderHistory(){
   var html=(psH.items.length?'<div class="notice '+(psH.level==='bad'?'bad':'')+'" style="display:block">'+psH.items.map(function(x){return esc(x.t);}).join('<br>')+'</div>':'')+'<div class="toolbar"><button class="btn" data-action="open-transcript">Cargar otro archivo</button></div>';
   html+='<div class="gpa-cmp" style="grid-template-columns:1fr">'+
     '<div><label class="k" for="gpaCalcEdit">GPA acumulado</label><input id="gpaCalcEdit" class="gpa-inline" style="font-size:24px" inputmode="decimal" value="'+(gpaOverride()!=null?fmt(gpaOverride()):(g.gpa==null?'':fmt(g.gpa)))+'" placeholder="—">'+
-      (gpaOverride()!=null?'<span class="small muted" style="display:block">editado · <button class="btn link small" style="padding:0" data-action="gpa-calc">restaurar</button></span>':'<span class="small muted" style="display:block">toca para editar</span>')+'</div>'+
+      (gpaOverride()!=null?'<span class="small muted" style="display:block">editado · <button class="btn link small" style="padding:0" data-action="gpa-calc">restaurar</button></span>':'')+'</div>'+
     '</div>';
   html+='<h4 class="sec">Historial académico</h4><p class="small muted" style="margin:0 0 8px">Datos leídos del transcript'+(S.transcriptName?' ('+esc(S.transcriptName)+')':'')+'. Si algo se leyó mal, corrígelo con Editar.</p>';
   html+='<table class="ctable hist"><colgroup><col style="width:104px"><col style="width:100px"><col><col style="width:76px"><col style="width:64px"><col style="width:76px"></colgroup>'+
