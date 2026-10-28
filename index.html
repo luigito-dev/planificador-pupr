@@ -174,6 +174,9 @@ pre.raw{white-space:pre-wrap;font-size:12px;background:var(--soft);padding:12px;
 .saved-pill{position:fixed;top:72px;right:16px;z-index:59;background:var(--paper);color:var(--ok);border:1px solid var(--line);box-shadow:0 2px 10px rgba(0,0,0,.08);padding:5px 12px;border-radius:999px;font-size:13px;font-weight:600;opacity:0;transform:translateY(-6px);transition:opacity .25s,transform .25s;pointer-events:none}
 .saved-pill.show{opacity:1;transform:none}
 @media (prefers-reduced-motion:reduce){.saved-pill{transition:none}}
+.toast.top{bottom:auto;width:max-content;max-width:calc(100% - 32px);padding:7px 16px;border-radius:999px;font-size:13.5px;box-shadow:0 4px 16px rgba(0,0,0,.2);text-align:center;animation:toastDown .2s ease-out}
+@keyframes toastDown{from{transform:translate(-50%,-8px);opacity:0}to{transform:translateX(-50%);opacity:1}}
+@media (prefers-reduced-motion:reduce){.toast.top{animation:none}}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:10px;font-size:14px;z-index:60;max-width:90%}
 .empty{padding:28px 0 12px}
 .empty h3{margin:0 0 6px;font-size:17px}
@@ -1558,6 +1561,7 @@ var lastSavedJSON, savedTimer, savedHide;
 function flashSaved(){
   clearTimeout(savedTimer); clearTimeout(savedHide);
   savedTimer=setTimeout(function(){
+    if(document.querySelector('.toast.top')) return; // ya hay un aviso arriba
     var el=document.getElementById('savedPill');
     if(!el){ el=document.createElement('div'); el.id='savedPill'; el.className='saved-pill'; el.setAttribute('role','status'); el.setAttribute('aria-live','polite'); el.textContent='✓ Guardado'; document.body.appendChild(el); }
     var hd=document.querySelector('header,.topbar'); var hb=hd?hd.getBoundingClientRect().bottom:0; el.style.top=Math.max(12,hb+10)+'px';
@@ -1723,8 +1727,14 @@ function fmtCr(x){ x=Number(x)||0; return (Math.round(x*100)/100).toString(); }
 function $(id){ return document.getElementById(id); }
 function toast(msg){
   var old=document.querySelector('.toast'); if(old) old.remove();
-  var t=document.createElement('div'); t.className='toast'; t.setAttribute('role','status'); t.textContent=msg;
-  document.body.appendChild(t); setTimeout(function(){ t.remove(); }, 3200);
+  var err=/^(No se pudo|Error)/i.test(String(msg));
+  var t=document.createElement('div'); t.className='toast'+(err?' err':' top'); t.setAttribute('role',err?'alert':'status'); t.textContent=msg;
+  if(!err){
+    // Arriba, debajo de la barra azul si se ve; así no tapa el plan.
+    var hd=document.querySelector('header,.topbar'); var hb=hd?hd.getBoundingClientRect().bottom:0; t.style.top=Math.max(12,hb+10)+'px';
+    var sp=document.getElementById('savedPill'); if(sp) sp.classList.remove('show');
+  }
+  document.body.appendChild(t); setTimeout(function(){ t.remove(); }, err?5000:3200);
 }
 function gradeClass(g){
   if(!g) return '';
