@@ -2623,6 +2623,18 @@ function renderStudent(){
       '<span><i class="dot" style="background:var(--bar-pend)"></i>Pendiente '+Math.round(pct(a.prog.pend))+'%</span>'+
       (a.prog.prepTotal?'<span>Preparatorios: '+a.prog.prepDone+' de '+a.prog.prepTotal+(a.prog.prepExempt?' ('+a.prog.prepExempt+' exentos)':'')+'</span>':'')+
       '</div></div>' : '');
+  fitSelects();
+}
+/** Ajusta el ancho de Programa y Especialidad al texto escogido, para que no ocupen tanto espacio. */
+function fitSelects(){
+  ['programSel','specSel'].forEach(function(id){
+    var s=document.getElementById(id); if(!s) return;
+    var o=s.options[s.selectedIndex], txt=o?o.text:'';
+    var cs=getComputedStyle(s), c=fitSelects._c||(fitSelects._c=document.createElement('canvas')), ctx=c.getContext('2d');
+    ctx.font=cs.fontWeight+' '+cs.fontSize+' '+cs.fontFamily;
+    var w=Math.ceil(ctx.measureText(txt).width)+parseFloat(cs.paddingLeft)+parseFloat(cs.paddingRight)+34;
+    s.style.width=Math.max(120,w)+'px';
+  });
 }
 
 /* ---------------- Pestañas ---------------- */
@@ -2684,7 +2696,7 @@ function wizardHTML(){
     '</ol><p class="small muted" style="margin:10px 0 0">¿Dudas? Toca <strong>Ayuda</strong> arriba a la derecha.</p></div>';
 }
 /* ---------------- Ayuda ---------------- */
-var APP_VERSION='28 oct 2026 · 6:15 pm';
+var APP_VERSION='28 oct 2026 · 6:20 pm';
 function openHelp(){
   var sec=function(t,items){ return '<h4 style="margin:16px 0 6px">'+t+'</h4><ul style="margin:0;padding-left:20px">'+items.map(function(i){return '<li style="margin:4px 0">'+i+'</li>';}).join('')+'</ul>'; };
   var body='<p style="margin-top:0">El planificador arma el plan de estudios de cada estudiante, trimestre por trimestre, siguiendo los prerrequisitos y las reglas de PUPR.</p>'+
