@@ -3141,18 +3141,25 @@ function startBlankPlan(){
     fillRecordsFromCurriculum();
     var pr=prEff(), terms=[];
     // Si el estudiante tiene cursos en progreso (IP), el primer trimestre los lleva ya puestos.
+    // Con transcript, el trimestre siguiente trae las clases sugeridas por el sistema (se pueden cambiar).
+    var g=null, suggested=0;
     try{
-      var g=Core.generatePlan(cur, S.records, S.electiveSel, pr, exemptList());
+      g=Core.generatePlan(cur, S.records, S.electiveSel, pr, exemptList());
       var t0=g.terms[0];
       if(t0 && t0.courses.length && t0.courses.every(function(c){ return c.fixed || c.grade==='IP'; })) terms.push(t0);
     }catch(e){}
     var start=terms.length ? Core.Terms.next(terms[0], pr.includeSummer) : {season:pr.startSeason, year:+pr.startYear};
-    terms.push({season:start.season, year:start.year, label:Core.Terms.label(start), courses:[]});
+    var nextT={season:start.season, year:start.year, label:Core.Terms.label(start), courses:[]};
+    if(g && S.records.length){
+      var gs=g.terms.filter(function(x){ return x.label===nextT.label; })[0] || g.terms[terms.length];
+      if(gs && gs.label===nextT.label){ nextT.courses=gs.courses.filter(function(c){ return !c.fixed && c.grade!=='IP'; }).map(function(c){ return Object.assign({}, c, {uid:Core.uid(), pinned:false}); }); suggested=nextT.courses.length; }
+    }
+    terms.push(nextT);
     S.planBeforeFill=null;
     session.deletedPlan=null;
     S.plan={terms:terms, unscheduled:[], blank:true}; S.planOriginal=null; S.planEdited=true; S.historyChanged=false; S.wizardSeen=true; session.showWizard=false;
     session.editMode=true; save(); renderAll();
-    toast('Plan en blanco listo. Agrega clases y trimestres; cuando quieras, pulsa "Acomodar automáticamente".');
+    toast(suggested ? 'Plan listo con '+(terms.length>1?'los cursos en progreso y ':'')+'las clases sugeridas para '+tS(nextT.label)+'. Cámbialas o agrega más; luego "Acomodar automáticamente" completa el resto.' : 'Plan en blanco listo. Agrega clases y trimestres; cuando quieras, pulsa "Acomodar automáticamente".');
   }
   if(S.plan && S.plan.terms.some(function(t){ return t.courses.length; })){
     modal({title:'Plan en blanco', narrow:true, body:'<p>Empezar un plan en blanco reemplaza el plan actual de este estudiante. ¿Deseas continuar?</p>',
