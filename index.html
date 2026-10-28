@@ -190,9 +190,9 @@ pre.raw{white-space:pre-wrap;font-size:12px;background:var(--soft);padding:12px;
 @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) .spill.on{background:#16321f;border-color:#2f6b40;color:#7fc3a0} :root:not([data-theme="light"]) .spill.warn{background:#33250f;border-color:#6b4a14;color:#f2b45f} }
 .alist{margin:0;padding-left:18px}.alist li{margin:0 0 8px;line-height:1.4}.alist li.bad{color:var(--danger)}
 .pq[data-pq]{cursor:pointer;border-bottom:1px dotted currentColor}
-.pqpop{position:fixed;z-index:70;max-width:260px;background:var(--paper);color:var(--ink);border:1px solid var(--line);border-left:4px solid var(--muted);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:9px 12px;font-size:13.5px;line-height:1.35;animation:pqIn .12s ease-out}
+.pqpop{position:fixed;z-index:70;max-width:300px;background:var(--paper);color:var(--ink);border:1px solid var(--line);border-left:4px solid var(--muted);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:9px 12px;font-size:13.5px;line-height:1.35;animation:pqIn .12s ease-out}
 .pqpop.done{border-left-color:var(--ok)} .pqpop.ip{border-left-color:var(--ip)} .pqpop.pend{border-left-color:var(--pend)} .pqpop.no{border-left-color:var(--danger)}
-.pqpop .pqc{font-weight:700} .pqpop .pqn{color:var(--muted);font-size:12.5px;margin-bottom:3px}
+.pqpop .pqc{font-weight:700} .pqpop .pqr{margin-top:6px;padding-top:6px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted)} .pqpop .pqr strong{color:var(--ink)} .pqno{color:var(--danger)} .pqpop .pqn{color:var(--muted);font-size:12.5px;margin-bottom:3px}
 @keyframes pqIn{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:none}}
 .saved-pill{position:fixed;top:72px;right:16px;z-index:59;background:var(--paper);color:var(--ok);border:1px solid var(--line);box-shadow:0 2px 10px rgba(0,0,0,.08);padding:5px 12px;border-radius:999px;font-size:13px;font-weight:600;opacity:0;transform:translateY(-6px);transition:opacity .25s,transform .25s;pointer-events:none}
 .saved-pill.show{opacity:1;transform:none}
@@ -1914,8 +1914,21 @@ function showPqPop(el){
   else if(st.ip[code]){ msg='En progreso'+(where?' ('+esc(tS(where))+')':'')+'.'; cls='ip'; }
   else if(where){ msg='Planificado en <strong>'+esc(tS(where))+'</strong>.'; cls='pend'; }
   else { msg='<strong>No está planificado</strong> todavía.'; cls='no'; }
+  // Lo que ese curso necesita antes (sus propios prerrequisitos) y cómo están.
+  var need='';
+  if(c && !rec && exemptList().indexOf(code)<0){
+    var ex=exemptList(), parts=(c.prereqs||[]).map(function(ors){
+      return ors.map(function(x){
+        var w=S.plan?Core.whereIs(S.plan,x):'', s=st.approved[x]||ex.indexOf(x)>=0?'<span class="pq-done">aprobado</span>':st.ip[x]?'<span class="pq-ip">en progreso</span>':w?'planificado en '+esc(tS(w)):'<span class="pqno">no planificado</span>';
+        return '<strong>'+esc(x)+'</strong> ('+s+')';
+      }).join(' o ');
+    });
+    var notes=(c.prereqText||'').split(',').map(function(x){return x.trim();}).filter(function(x){return x && !Core.isCourseCode(x);});
+    if(notes.length) parts.push(esc(notes.join(', ')));
+    need='<div class="pqr">'+(parts.length?'Antes necesita: '+parts.join(', ')+'.':'No tiene prerrequisitos.')+'</div>';
+  }
   var d=document.createElement('div'); d.id='pqPop'; d.className='pqpop '+cls; d.setAttribute('role','status');
-  d.innerHTML='<div class="pqc">'+esc(code)+'</div>'+(c&&c.name?'<div class="pqn">'+esc(c.name)+'</div>':'')+'<div class="pqm">'+msg+'</div>';
+  d.innerHTML='<div class="pqc">'+esc(code)+'</div>'+(c&&c.name?'<div class="pqn">'+esc(c.name)+'</div>':'')+'<div class="pqm">'+msg+'</div>'+need;
   document.body.appendChild(d);
   var r=el.getBoundingClientRect(), w=d.offsetWidth, h=d.offsetHeight;
   var x=Math.max(8, Math.min(r.left+r.width/2-w/2, window.innerWidth-w-8)), y=r.bottom+8;
@@ -3634,7 +3647,8 @@ function openElectives(preChecked, eo){
   var html='';
   Object.keys(groups).forEach(function(g){
     var G=groups[g];
-    if(eo.pendingOnly && !G.slots.length) return;   // desde Alertas: solo los grupos que faltan por escoger
+    if(eo.pendingOnly && !G.slots.length) return;
+    if(eo.group!=null && g!==eo.group) return;   // desde Alertas: solo los grupos que faltan por escoger
     var opts=cur.courses.filter(function(o){return o.type==='OPC' && o.group===(g==='(sin grupo)'?'':g);});
     if(elecKind(g)[0]==='sohu'){ var chosenS=G.slots.map(function(s){return S.electiveSel[s.code];}); opts=opts.filter(function(o){ return o.custom || chosenS.indexOf(o.code)>=0; }); }
     var selected=preChecked ? (preChecked[g]||[]) : G.slots.map(function(s){return S.electiveSel[s.code];}).filter(Boolean);
@@ -3649,7 +3663,8 @@ function openElectives(preChecked, eo){
     if(G.slots.length) html+='<div class="row" style="margin-top:8px" data-addwrap><input data-oc placeholder="Código" style="width:110px"><input data-on placeholder="Nombre del curso" style="flex:1;min-width:140px"><input data-ocr placeholder="Cr." inputmode="decimal" style="width:60px"><button class="btn" data-addopt>Agregar otro curso</button></div>';
     html+='</fieldset>';
   });
-  var m=modal({title:eo.pendingOnly?'Electivas por escoger':'Seleccionar electivas', body:html||'<p>'+(eo.pendingOnly?'No hay electivas por escoger.':'Este currículo no tiene electivas.')+'</p>', buttons:[
+  if(eo.moveUid) html+='<p class="small" style="margin:4px 0 0"><button class="btn link small" data-move-slot>Mover o editar este espacio</button></p>';
+  var m=modal({title:eo.group!=null?'Escoger: '+elecKind(eo.group)[1]:eo.pendingOnly?'Electivas por escoger':'Seleccionar electivas', body:html||'<p>'+(eo.pendingOnly?'No hay electivas por escoger.':'Este currículo no tiene electivas.')+'</p>', buttons:[
     {label:'Cancelar'},
     {label:'Guardar selección', primary:true, onClick:function(b){
       var sel={};
@@ -3658,12 +3673,13 @@ function openElectives(preChecked, eo){
         groups[g].slots.forEach(function(slot,i){ if(chosen[i]) sel[slot.code]=chosen[i]; });
       });
       // Se conservan las selecciones de los grupos que no se mostraron.
-      if(eo.pendingOnly) Object.keys(S.electiveSel||{}).forEach(function(k){ var shownG=false; b.querySelectorAll('fieldset[data-group]').forEach(function(fs){ if(groups[fs.getAttribute('data-group')].slots.some(function(s){return s.code===k;})) shownG=true; }); if(!shownG && !(k in sel)) sel[k]=S.electiveSel[k]; });
+      if(eo.pendingOnly || eo.group!=null) Object.keys(S.electiveSel||{}).forEach(function(k){ var shownG=false; b.querySelectorAll('fieldset[data-group]').forEach(function(fs){ if(groups[fs.getAttribute('data-group')].slots.some(function(s){return s.code===k;})) shownG=true; }); if(!shownG && !(k in sel)) sel[k]=S.electiveSel[k]; });
       S.electiveSel=sel; save();
       if(S.planEdited){ var r2=syncPlanWithRecords(); save(); renderAll(); toast(r2.replaced.length?'Electivas colocadas en el plan sin perder tus cambios.':'Selección guardada.'); }
       else regenerate();
     }}
   ]});
+  var mv=m.body.querySelector('[data-move-slot]'); if(mv) mv.addEventListener('click',function(e){ e.preventDefault(); m.close(); openCourseEditor(eo.moveUid); });
   function currentChecks(){
     var pc={}; m.body.querySelectorAll('fieldset[data-group]').forEach(function(fs){ pc[fs.getAttribute('data-group')]=[].slice.call(fs.querySelectorAll('input[type=checkbox]:checked')).map(function(i){return i.value;}); });
     return pc;
@@ -4557,7 +4573,11 @@ document.addEventListener('click',function(e){
     if(!e.target.closest('.menu')) closeMenus();
     // Tocar un curso del plan (sin entrar a Editar) abre su ventana para cambiarlo de trimestre.
     var crow=session.tab==='plan' && e.target.closest('.years .crow[data-uid]');
-    if(crow && !e.target.closest('a,input,select,textarea,label') && Date.now()-lastDragEnd>400 && !document.querySelector('.overlay')) openCourseEditor(crow.getAttribute('data-uid'));
+    if(crow && !e.target.closest('a,input,select,textarea,label') && Date.now()-lastDragEnd>400 && !document.querySelector('.overlay')){
+      var uidC=crow.getAttribute('data-uid'), fC=findCourse(uidC), cuC=curr();
+      var slotC=fC && fC.c.placeholder && cuC && cuC.courses.filter(function(x){ return x.code===(fC.c.slot||fC.c.code); })[0];
+      if(slotC) openElectives(null,{group:slotC.group||'(sin grupo)', moveUid:uidC}); else openCourseEditor(uidC);
+    }
     return;
   }
   var a=btn.getAttribute('data-action');
