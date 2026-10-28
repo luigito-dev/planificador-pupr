@@ -961,6 +961,16 @@ var Core = (function () {
           slots[slot.code] = { status: approved[hit.code] ? 'done' : 'ip', filledBy: hit.code, grade: approved[hit.code] ? approved[hit.code].grade : 'IP' };
         } else slots[slot.code] = { status: 'pending', filledBy: null, grade: '' };
       });
+      // Cursos de literatura (LITE) del transcript cuentan como electiva SOHU aunque no estén en la lista del currículo.
+      var inCurr = {}; curr.courses.forEach(function (c) { inCurr[c.code] = true; });
+      var liteOf = function (pool) { return Object.keys(pool).filter(function (code) { return /^LITE\s/.test(code) && !inCurr[code] && !used[code] && num(pool[code].credits || 3) > 0; }).sort(); };
+      curr.courses.filter(function (c) { return c.type === 'ELEC' && String(c.group).toUpperCase() === 'SOHU' && slots[c.code] && slots[c.code].status === 'pending'; }).forEach(function (slot) {
+        var a = liteOf(approved)[0], i = a ? null : liteOf(ip)[0], code = a || i;
+        if (!code) return;
+        used[code] = true;
+        var rr = (a ? approved : ip)[code] || {};
+        slots[slot.code] = { status: a ? 'done' : 'ip', filledBy: code, grade: a ? approved[code].grade : 'IP', credits: num(rr.credits) || slot.credits, name: rr.title || rr.name || '' };
+      });
     }
     return {
       approvedCodes: Object.keys(approved), ipCodes: Object.keys(ip),
@@ -1914,7 +1924,7 @@ function planElecGroup(c, cur, sg){
 function groupsNote(slots, st, byCode){
   var by={}, order=[];
   slots.forEach(function(s){ if(!by[s.group]){ by[s.group]={need:0,done:0}; order.push(s.group); } by[s.group].need+=s.credits;
-    var ss=st.slots[s.code]; if(ss&&ss.status==='done'&&byCode[ss.filledBy]) by[s.group].done+=byCode[ss.filledBy].credits; });
+    var ss=st.slots[s.code]; if(ss&&ss.status==='done'&&(byCode[ss.filledBy]||ss.credits)) by[s.group].done+=byCode[ss.filledBy]?byCode[ss.filledBy].credits:ss.credits; });
   return order.map(function(g){ return {group:g,label:elecKind(g)[1],kind:elecKind(g)[0],need:by[g].need,done:by[g].done}; });
 }
 
@@ -2621,15 +2631,10 @@ function renderPlan(){
     years[yIdx[ay]].terms.push(ti);
   });
   var cCfg=costCfg(), cOn=cCfg.on;
-  if(cOn){
-    var cTot=0, cN=0; win.idx.forEach(function(ti){ var r=termCost(S.plan.terms[ti],cCfg); if(r){ cTot+=r.total; cN++; } });
-    if(cN) html+='<div class="costbar"><span>Costo aproximado de lo que falta: <strong>'+money(cTot)+'</strong> <span class="muted">('+cN+' trimestre'+(cN>1?'s':'')+', tarifas 2026-2027)</span></span><button class="btn link small" data-action="cost-settings">Ajustar</button></div>';
-  }
   html+='<div class="years'+(edit?' editing':'')+'">';
   years.forEach(function(y, yi){
     var ycr=y.terms.reduce(function(s,ti){ return s+Core.termCredits(S.plan.terms[ti]); },0);
-    var ycost=cOn?y.terms.reduce(function(s,ti){ var r=termCost(S.plan.terms[ti],cCfg); return s+(r?r.total:0); },0):0;
-    html+='<section class="yearblock"><div class="yh"><h3>Año '+(yi+1)+'</h3><span class="muted">'+y.ay+'–'+(y.ay+1)+'</span>'+(yi===0?'<span class="ypills"><button class="spill act" data-action="fastest" title="Compara cuánto se acorta el plan con más créditos o con Summer">Terminar antes</button><button class="spill'+(cOn?' on':'')+'" data-action="cost-toggle" aria-pressed="'+(cOn?'true':'false')+'" title="'+(cOn?'Ocultar':'Mostrar')+' el costo aproximado">COSTOS</button></span>':'')+'<span class="ycr">'+fmtCr(ycr)+' créditos'+(ycost?' · '+money(ycost):'')+'</span></div><div class="ygrid'+(pr.includeSummer||y.terms.length>3?' four':'')+'">';
+    html+='<section class="yearblock"><div class="yh"><h3>Año '+(yi+1)+'</h3><span class="muted">'+y.ay+'–'+(y.ay+1)+'</span>'+(yi===0?'<span class="ypills"><button class="spill act" data-action="fastest" title="Compara cuánto se acorta el plan con más créditos o con Summer">Terminar antes</button><button class="spill'+(cOn?' on':'')+'" data-action="cost-toggle" aria-pressed="'+(cOn?'true':'false')+'" title="'+(cOn?'Ocultar':'Mostrar')+' el costo aproximado">COSTOS</button>'+(cOn?'<button class="btn link small" data-action="cost-settings" title="Cambiar tarifas">Tarifas</button>':'')+'</span>':'')+'<span class="ycr">'+fmtCr(ycr)+' créditos</span></div><div class="ygrid'+(pr.includeSummer||y.terms.length>3?' four':'')+'">';
     y.terms.forEach(function(ti){
       var t=S.plan.terms[ti];
       var cr=Core.termCredits(t), cap=Core.termCap(t,pr), flag='';
@@ -3274,7 +3279,7 @@ function auditBody(){
       var lbl=elecKind(slot.group)[1]+' '+count[slot.group];
       var ss=st.slots[slot.code];
       if(ss && ss.status!=='pending' && ss.filledBy){
-        var fc=byCode[ss.filledBy]||{code:ss.filledBy,name:'',credits:0,prereqs:[],coreqs:[]}; shown[fc.code]=true;
+        var fc=byCode[ss.filledBy]||{code:ss.filledBy,name:ss.name||'',credits:ss.credits||0,prereqs:[],coreqs:[]}; shown[fc.code]=true;
         var canDel=elecKind(slot.group)[0]!=='tec' && fc.custom;
         var cc=courseCells(fc, esc(fc.code)+(canDel?delBtn(slot.code,fc.code):''), ' '+elecTag(slot.group,count[slot.group]));
         trs.push('<tr class="'+(cc.s?'s-'+cc.s:'')+'" data-code="'+esc(fc.code)+'">'+cc.html+'</tr>');
@@ -3940,7 +3945,12 @@ function exportAuditPDF(){
       body.push([c.code, pdfSafe(c.name+(exempt?' (exento)':'')+(rec&&rec.equiv?' (por '+rec.equiv+')':'')+(c.type==='OPC'?' ['+elecKind(c.group)[1]+']':'')), fmtCr(c.credits), g, rec?pdfSafe(tS(rec.term)):'', pdfSafe(reqTxt(c.prereqs)+(notes.length?(c.prereqs.length?', ':'')+notes.join(', '):'')), pdfSafe(reqTxt(c.coreqs))]);
       status.push(s||'');
     });
-    if(slots.length && !rows.some(function(o){return o.type==='OPC';})) { body.push(['', 'Electiva por seleccionar', '', '', '', '', '']); status.push(''); }
+    // Electivas llenadas con cursos fuera del currículo (p. ej. LITE como SOHU)
+    var extra=0;
+    slots.forEach(function(sl){ var ss=st.slots[sl.code]; if(!ss || ss.status==='pending' || !ss.filledBy || byCode[ss.filledBy]) return;
+      var rec=recordFor(ss.filledBy), g=rec?String(rec.grade).toUpperCase():(ss.grade||'');
+      body.push([ss.filledBy, pdfSafe((ss.name||'')+' ['+elecKind(sl.group)[1]+']'), fmtCr(ss.credits||sl.credits), g, rec?pdfSafe(tS(rec.term)):'', '', '']); status.push(statusOf(g)||''); extra++; });
+    if(slots.length && !extra && !rows.some(function(o){return o.type==='OPC';})) { body.push(['', 'Electiva por seleccionar', '', '', '', '', '']); status.push(''); }
   });
   var fills={ok:[231,242,236],fail:[248,230,231],ip:[230,238,246],inc:[251,240,222]};
   doc.autoTable({startY:84+OY-14, head:[['Curso','Título','Crs.','Nota','Trimestre','Prerrequisito','Correquisito']], body:body, theme:'grid',
@@ -4239,9 +4249,9 @@ function exportPlanPDF(opts){
   });
   if(pdfCost && pdfCostTot){
     if(y>680){ doc.addPage(); y=LH_TOP+10; }
-    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(28,42,57); doc.text('Costo aproximado de los trimestres planificados: '+money(pdfCostTot), 54, y); y+=13;
+    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(28,42,57); doc.text('Costo aproximado por trimestre', 54, y); y+=13;
     doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(100,110,120);
-    doc.splitTextToSize(pdfSafe('Incluye matrícula por crédito, cuota general'+(pdfCfg.parking?', estacionamiento':'')+' y cargos de laboratorio/diseño. Según '+COST_DEFAULT.source+'. No incluye otros cargos, libros, ni ayudas económicas o becas. Las tarifas pueden cambiar.'), 612-108).forEach(function(l){ doc.text(l,54,y); y+=10; });
+    doc.splitTextToSize(pdfSafe('El costo que aparece junto a cada trimestre incluye matrícula por crédito, cuota general'+(pdfCfg.parking?', estacionamiento':'')+' y cargos de laboratorio/diseño. Según '+COST_DEFAULT.source+'. No incluye otros cargos, libros, ni ayudas económicas o becas. Las tarifas pueden cambiar.'), 612-108).forEach(function(l){ doc.text(l,54,y); y+=10; });
     y+=16;
   }
   var missP=session.includeMissing?missingCourses():[];
