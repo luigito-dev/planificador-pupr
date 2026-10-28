@@ -2570,15 +2570,12 @@ function renderPlan(){
       '<span class="spacer"></span>'+
       '<button class="btn ghost danger" data-action="delete-plan" title="Borrar el plan o todo lo del estudiante">Borrar</button>'+
       '<div class="menu"><button class="btn ghost" data-action="menu" aria-haspopup="true" aria-expanded="false">Más ▾</button><div class="menu-list" role="menu">'+
-        '<button role="menuitem" data-action="open-transcript">'+(S.records.length?'Cambiar el transcript':'Subir transcript o Degree Audit')+'</button>'+
-        '<button role="menuitem" data-action="open-audit">Marcar cursos a mano</button>'+
-        '<hr>'+
         '<button role="menuitem" data-action="fastest">Terminar antes</button>'+
         '<button role="menuitem" data-action="cost-settings">Costo aproximado'+(costCfg().on?' ✓':'')+'</button>'+
         '<button role="menuitem" data-action="compare">Comparar con otro programa</button>'+
         (hasPrep?'<button role="menuitem" data-action="preps">Preparatorios que aplican</button>':'')+
         '<hr>'+
-        '<button role="menuitem" data-action="add-term">Agregar trimestre</button>'+
+        (planWindow(edit).limited?'<button role="menuitem" data-action="add-term">Agregar trimestre</button>':'')+
         '<button role="menuitem" data-action="blank-plan">Empezar plan en blanco</button>'+
         '<button role="menuitem" data-action="regen-fresh">Hacer el plan de cero</button>'+
       '</div></div></div>';
