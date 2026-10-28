@@ -2234,6 +2234,8 @@ function missingHTML(){
 /** Índices de los trimestres que se muestran (los primeros N con cursos). 0 = todos. */
 function planWindow(edit){
   var n=Core.num(S.planTerms)||0, idx=[], shown=0, cut=-1;
+  // Siempre al menos 1 trimestre sugerido además del de cursos IP; si no hay IP, al menos 2.
+  if(n){ var hasIP=S.plan.terms.some(function(t){ return t.courses.length && t.courses.every(function(c){ return c.grade==='IP' || c.fixed; }); }); n=Math.max(n, hasIP?1:2); }
   S.plan.terms.forEach(function(t,i){
     if(cut>=0) return;
     var has=t.courses.length>0;
@@ -2634,6 +2636,14 @@ function renderTabs(){
 
 /* ---------------- Inicio guiado: estudiante → historial → plan ---------------- */
 function autoRegen(){ if(curr() && S.plan) regenerate(true); else renderAll(); }
+/** Después de subir el transcript se muestra primero el plan: si no hay plan, se hace uno con las clases sugeridas. */
+function planAfterTranscript(){
+  session.tab='plan'; session.showWizard=false; S.wizardSeen=true;
+  if(!curr()){ renderAll(); return; }
+  if(S.plan && S.plan.blank && !S.plan.terms.some(function(t){ return t.courses.some(function(c){ return c.grade!=='IP' && !c.fixed; }); })){ S.plan=null; }
+  if(S.plan) regenerate(true); else { save(); regenerate(true); }
+  renderAll();
+}
 function quickStartHTML(){
   var cur=curr(), grp=groupByName(currentBase()), msg, btns='';
   if(!currentBase()) msg='Escoge arriba el <strong>programa</strong> del estudiante para empezar.';
@@ -2674,7 +2684,7 @@ function wizardHTML(){
     '</ol><p class="small muted" style="margin:10px 0 0">¿Dudas? Toca <strong>Ayuda</strong> arriba a la derecha.</p></div>';
 }
 /* ---------------- Ayuda ---------------- */
-var APP_VERSION='28 oct 2026 · 5:45 pm';
+var APP_VERSION='28 oct 2026 · 5:55 pm';
 function openHelp(){
   var sec=function(t,items){ return '<h4 style="margin:16px 0 6px">'+t+'</h4><ul style="margin:0;padding-left:20px">'+items.map(function(i){return '<li style="margin:4px 0">'+i+'</li>';}).join('')+'</ul>'; };
   var body='<p style="margin-top:0">El planificador arma el plan de estudios de cada estudiante, trimestre por trimestre, siguiendo los prerrequisitos y las reglas de PUPR.</p>'+
@@ -3164,13 +3174,16 @@ function startBlankPlan(){
     var nextT={season:start.season, year:start.year, label:Core.Terms.label(start), courses:[]};
     if(g){
       // Primer trimestre del plan automático que tenga clases que no sean IP: esas son las sugeridas.
-      var gs=g.terms.filter(function(x){ return x.courses.some(function(c){ return !c.fixed && c.grade!=='IP'; }); })[0];
-      if(gs){
-        nextT={season:gs.season, year:gs.year, label:gs.label, courses:gs.courses.filter(function(c){ return !c.fixed && c.grade!=='IP'; }).map(function(c){ return Object.assign({}, c, {uid:Core.uid(), pinned:false}); })};
-        suggested=nextT.courses.length;
-      }
+      var gsAll=g.terms.filter(function(x){ return x.courses.some(function(c){ return !c.fixed && c.grade!=='IP'; }); });
+      var want=terms.length?1:2, extraT=[];
+      gsAll.slice(0,want).forEach(function(gs,k){
+        var tt={season:gs.season, year:gs.year, label:gs.label, courses:gs.courses.filter(function(c){ return !c.fixed && c.grade!=='IP'; }).map(function(c){ return Object.assign({}, c, {uid:Core.uid(), pinned:false}); })};
+        if(k===0) nextT=tt; else extraT.push(tt);
+        suggested+=tt.courses.length;
+      });
     }
     terms.push(nextT);
+    if(typeof extraT!=='undefined') extraT.forEach(function(x){ terms.push(x); });
     S.planBeforeFill=null;
     session.deletedPlan=null;
     S.plan={terms:terms, unscheduled:[], blank:true}; S.planOriginal=null; S.planEdited=true; S.historyChanged=false; S.wizardSeen=true; session.showWizard=false;
@@ -3343,9 +3356,8 @@ function applyTranscriptText(text,name){
     if(hit){ S.program=hit; S.programBase=baseOf(hit); }
   }
   save();
-  autoRegen();
-  session.tab='hist'; renderAll();
-  toast('Se leyeron '+parsed.records.length+' cursos. Revisa el historial.');
+  planAfterTranscript();
+  toast('Se leyeron '+parsed.records.length+' cursos. Este es el plan con las clases sugeridas.');
 }
 function viewTranscript(){
   var wrap=document.createElement('div');
@@ -4073,9 +4085,8 @@ function importAuditFile(f){
       if(res.student) S.student.name=res.student;
       if(res.studentId) S.student.id=res.studentId;
       markChanged(); save();
-      autoRegen();
-      session.tab='hist'; renderAll();
-      toast('Se importaron '+res.records.length+' cursos del Degree Audit.');
+      planAfterTranscript();
+      toast('Se importaron '+res.records.length+' cursos del Degree Audit. Este es el plan con las clases sugeridas.');
     }
     if(S.records.length){
       modal({title:'Importar Degree Audit', narrow:true, body:'<p style="margin-top:0">El historial actual tiene '+S.records.length+' cursos. Se reemplazará con los '+res.records.length+' cursos del Excel.</p>',
