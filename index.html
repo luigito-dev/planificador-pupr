@@ -2073,7 +2073,7 @@ function reviewHTML(pendingSlots){
   var chips=[], n=0, items=[];
   session.review=null;
   al.forEach(function(a){ items.push({t:a.t, bad:a.lvl==='bad'}); });
-  if(pendingSlots) items.push({t:pendingSlots+' electiva'+(pendingSlots>1?'s':'')+' por escoger.', act:'open-audit', actLabel:'Escoger o ver electivas'});
+  if(pendingSlots) items.push({t:pendingSlots+' electiva'+(pendingSlots>1?'s':'')+' por escoger.', act:'electives-pending', actLabel:'Escoger electivas'});
   if(miss.length) items.push({t:'Faltan '+miss.length+' curso'+(miss.length>1?'s':'')+' por planificar: '+miss.map(function(c){return c.code;}).join(', ')+'.'});
   if(uns.length) items.push({t:uns.length+' curso'+(uns.length>1?'s':'')+' sin ubicar: '+uns.map(function(u){return u.code;}).join(', ')+'.', bad:true});
   if(pendingSlots){ chips.push('<span class="chip">'+pendingSlots+' electiva'+(pendingSlots>1?'s':'')+' por escoger</span>'); n++; }
@@ -3621,7 +3621,8 @@ function showValidation(b){
 }
 
 /* ---------------- Electivas ---------------- */
-function openElectives(preChecked){
+function openElectives(preChecked, eo){
+  eo=eo||{};
   var cur=curr(); if(!cur) return;
   var st=Core.buildStatus(cur,S.records,S.plannerRules);
   var groups={};
@@ -3633,6 +3634,7 @@ function openElectives(preChecked){
   var html='';
   Object.keys(groups).forEach(function(g){
     var G=groups[g];
+    if(eo.pendingOnly && !G.slots.length) return;   // desde Alertas: solo los grupos que faltan por escoger
     var opts=cur.courses.filter(function(o){return o.type==='OPC' && o.group===(g==='(sin grupo)'?'':g);});
     if(elecKind(g)[0]==='sohu'){ var chosenS=G.slots.map(function(s){return S.electiveSel[s.code];}); opts=opts.filter(function(o){ return o.custom || chosenS.indexOf(o.code)>=0; }); }
     var selected=preChecked ? (preChecked[g]||[]) : G.slots.map(function(s){return S.electiveSel[s.code];}).filter(Boolean);
@@ -3647,7 +3649,7 @@ function openElectives(preChecked){
     if(G.slots.length) html+='<div class="row" style="margin-top:8px" data-addwrap><input data-oc placeholder="Código" style="width:110px"><input data-on placeholder="Nombre del curso" style="flex:1;min-width:140px"><input data-ocr placeholder="Cr." inputmode="decimal" style="width:60px"><button class="btn" data-addopt>Agregar otro curso</button></div>';
     html+='</fieldset>';
   });
-  var m=modal({title:'Seleccionar electivas', body:html||'<p>Este currículo no tiene electivas.</p>', buttons:[
+  var m=modal({title:eo.pendingOnly?'Electivas por escoger':'Seleccionar electivas', body:html||'<p>'+(eo.pendingOnly?'No hay electivas por escoger.':'Este currículo no tiene electivas.')+'</p>', buttons:[
     {label:'Cancelar'},
     {label:'Guardar selección', primary:true, onClick:function(b){
       var sel={};
@@ -3655,6 +3657,8 @@ function openElectives(preChecked){
         var g=fs.getAttribute('data-group'); var chosen=[].slice.call(fs.querySelectorAll('input:checked')).map(function(i){return i.value;});
         groups[g].slots.forEach(function(slot,i){ if(chosen[i]) sel[slot.code]=chosen[i]; });
       });
+      // Se conservan las selecciones de los grupos que no se mostraron.
+      if(eo.pendingOnly) Object.keys(S.electiveSel||{}).forEach(function(k){ var shownG=false; b.querySelectorAll('fieldset[data-group]').forEach(function(fs){ if(groups[fs.getAttribute('data-group')].slots.some(function(s){return s.code===k;})) shownG=true; }); if(!shownG && !(k in sel)) sel[k]=S.electiveSel[k]; });
       S.electiveSel=sel; save();
       if(S.planEdited){ var r2=syncPlanWithRecords(); save(); renderAll(); toast(r2.replaced.length?'Electivas colocadas en el plan sin perder tus cambios.':'Selección guardada.'); }
       else regenerate();
@@ -3685,7 +3689,7 @@ function openElectives(preChecked){
       list.push({code:code2,name:name,credits:cr,group:g==='(sin grupo)'?'':g});
       var max=+fs.getAttribute('data-max'); pc[g]=pc[g]||[]; if(pc[g].length<max) pc[g].push(code2);
     }
-    save(); m.close(); openElectives(pc);
+    save(); m.close(); openElectives(pc, eo);
   });
   m.body.addEventListener('change',function(e){
     var fs=e.target.closest('fieldset'); if(!fs) return;
@@ -4591,6 +4595,7 @@ document.addEventListener('click',function(e){
   else if(a==='restore') openRestore();
   else if(a==='plan-all'){ S.planTerms=0; save(); renderAll(); }
   else if(a==='electives') openElectives();
+  else if(a==='electives-pending') openElectives(null,{pendingOnly:true});
   else if(a==='preps') openPreps();
   else if(a==='view-transcript') viewTranscript();
   else if(a==='pdf-plan') askPDF(function(){ exportPlanPDF(); },{missing:true,notes:true});
