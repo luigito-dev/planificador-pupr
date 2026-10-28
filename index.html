@@ -1719,6 +1719,7 @@ function loadStudent(id){
   var d=defaultState();
   STUDENT_FIELDS.forEach(function(k){ var v=snap[k]!==undefined?snap[k]:d[k]; S[k]=(v===undefined)?undefined:JSON.parse(JSON.stringify(v)); });
   S.currentId=id; session.pdfData=null; session.editMode=false; session.tab='plan'; save();
+  ensureSuggested();
   renderAll();
   toast('Abierto: '+(S.student.name||'Estudiante sin nombre'));
 }
@@ -2232,8 +2233,10 @@ function planWindow(edit){
     if(cut>=0) return;
     var has=t.courses.length>0;
     if(!has && !edit && !t.manual) return;
-    if(n && has && shown>=n){ cut=i; return; }
-    idx.push(i); if(has) shown++;
+    // El trimestre de cursos en progreso (IP) no cuenta: siempre se ve además de los trimestres con clases sugeridas.
+    var ipOnly=has && t.courses.every(function(c){ return c.grade==='IP' || c.fixed; });
+    if(n && has && !ipOnly && shown>=n){ cut=i; return; }
+    idx.push(i); if(has && !ipOnly) shown++;
   });
   var rest=[];
   if(cut>=0) S.plan.terms.slice(cut).forEach(function(t){ t.courses.forEach(function(c){ rest.push(c); }); });
@@ -3167,6 +3170,18 @@ function startBlankPlan(){
     modal({title:'Plan en blanco', narrow:true, body:'<p>Empezar un plan en blanco reemplaza el plan actual de este estudiante. ¿Deseas continuar?</p>',
       buttons:[{label:'Cancelar'},{label:'Empezar en blanco',primary:true,onClick:go}]});
   } else go();
+}
+/** Plan a mano sin clases (solo IP) y con transcript: pone las clases sugeridas del trimestre siguiente. */
+function ensureSuggested(){
+  var cur=curr(); if(!cur || !S.plan || !S.plan.blank || !S.records.length) return false;
+  var T=S.plan.terms, isIP=function(c){ return c.grade==='IP' || c.fixed; };
+  if(T.some(function(t){ return t.courses.some(function(c){ return !isIP(c); }); })) return false;
+  var g; try{ g=Core.generatePlan(cur, S.records, S.electiveSel, prEff(), exemptList()); }catch(e){ return false; }
+  var gt=g.terms.filter(function(x){ return x.courses.some(function(c){ return !isIP(c); }); })[0]; if(!gt) return false;
+  var tgt=T.filter(function(x){ return x.season===gt.season && +x.year===+gt.year; })[0];
+  if(!tgt){ tgt={season:gt.season, year:gt.year, label:gt.label, courses:[], manual:true}; T.push(tgt); T.sort(function(a,b){ return termOrder(a)-termOrder(b); }); }
+  gt.courses.filter(function(c){ return !isIP(c); }).forEach(function(c){ tgt.courses.push(Object.assign({}, c, {uid:Core.uid(), pinned:false})); });
+  save(); return true;
 }
 /** Completa automáticamente lo que falta a partir de los trimestres que ya se planificaron a mano. */
 function completePlan(){
@@ -4773,6 +4788,7 @@ if(S._summerRegen){
   if(hasSummer){ if(S.planEdited) S.historyChanged=true; else { S.plan=null; S.planOriginal=null; } }
   save();
 }
+try{ ensureSuggested(); }catch(e){}
 renderAll();
 })();
 
