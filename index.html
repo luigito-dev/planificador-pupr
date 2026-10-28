@@ -2157,7 +2157,7 @@ function reviewHTML(pendingSlots){
   var chips=[], n=0, items=[];
   session.review=null;
   al.forEach(function(a){ items.push({t:a.t, bad:a.lvl==='bad'}); });
-  if(pendingSlots) items.push({t:pendingSlots+' electiva'+(pendingSlots>1?'s':'')+' por escoger.', act:'electives-pending', actLabel:'Escoger electivas'});
+  if(pendingSlots) items.push({t:pendingSlots+' electiva'+(pendingSlots>1?'s':'')+' por escoger.', act:'electives-pending', actLabel:'Escoger electivas', act2:'open-audit', act2Label:'Ver currículo'});
   if(miss.length) items.push({t:'Faltan '+miss.length+' curso'+(miss.length>1?'s':'')+' por planificar: '+miss.map(function(c){return c.code;}).join(', ')+'.'});
   if(uns.length) items.push({t:uns.length+' curso'+(uns.length>1?'s':'')+' sin ubicar: '+uns.map(function(u){return u.code;}).join(', ')+'.', bad:true});
   if(pendingSlots){ chips.push('<span class="chip">'+pendingSlots+' electiva'+(pendingSlots>1?'s':'')+' por escoger</span>'); n++; }
@@ -2183,7 +2183,7 @@ function reviewHTML(pendingSlots){
 function openAlertsList(){
   var r=session.review;
   var body=!r||!r.items.length ? '<p style="margin:0">No hay alertas para este estudiante.</p>' :
-    '<ul class="alist">'+r.items.map(function(i){ return '<li'+(i.bad?' class="bad"':'')+'>'+esc(i.t)+(i.act?' <button class="btn link small" data-action="'+i.act+'">'+esc(i.actLabel)+'</button>':'')+'</li>'; }).join('')+'</ul>';
+    '<ul class="alist">'+r.items.map(function(i){ return '<li'+(i.bad?' class="bad"':'')+'>'+esc(i.t)+(i.act?' <button class="btn link small" data-action="'+i.act+'">'+esc(i.actLabel)+'</button>':'')+(i.act2?' · <button class="btn link small" data-action="'+i.act2+'">'+esc(i.act2Label)+'</button>':'')+'</li>'; }).join('')+'</ul>';
   var m=modal({title:'Alertas', narrow:true, body:body});
   m.body.addEventListener('click',function(e){ if(e.target.closest('[data-action]')) setTimeout(m.close,0); });
 }
@@ -2614,7 +2614,7 @@ function renderStudent(){
     (groupByName(currentBase()) ? '<span><label for="specSel">Especialidad </label><select id="specSel">'+
       (groupByName(currentBase()).def?'':'<option value="">Selecciona la especialidad</option>')+
       groupByName(currentBase()).specs.map(function(s){return '<option value="'+esc(s[1])+'"'+(s[1]===S.program?' selected':'')+'>'+esc(s[0])+'</option>';}).join('')+
-    '</select></span>' : '')+(S.program&&cur&&S.plan?'<button class="spill act" data-action="compare" title="Comparar con otro programa">Comparar</button>':'')+(S.program?'<button class="btn link" data-action="'+(cur?'open-audit':'open-curriculum')+'">'+(cur?'Ver currículo':'Cargar currículo')+'</button>':'')+trInfo+'</div>'+
+    '</select></span>' : '')+(S.program&&cur&&S.plan?'<button class="spill act" data-action="compare" title="Comparar con otro programa">Comparar</button>':'')+(S.program?'<button class="spill act" data-action="'+(cur?'open-audit':'open-curriculum')+'">'+(cur?'Ver currículo':'Cargar currículo')+'</button>':'')+trInfo+'</div>'+
     (total? '<div class="progress" aria-label="Progreso académico"><div class="bar">'+
       '<i style="width:'+pct(a.prog.done)+'%;background:var(--ok)"></i>'+
       '<i style="width:'+pct(a.prog.ip)+'%;background:var(--ip)"></i></div>'+
@@ -2684,7 +2684,7 @@ function wizardHTML(){
     '</ol><p class="small muted" style="margin:10px 0 0">¿Dudas? Toca <strong>Ayuda</strong> arriba a la derecha.</p></div>';
 }
 /* ---------------- Ayuda ---------------- */
-var APP_VERSION='28 oct 2026 · 5:55 pm';
+var APP_VERSION='28 oct 2026 · 6:10 pm';
 function openHelp(){
   var sec=function(t,items){ return '<h4 style="margin:16px 0 6px">'+t+'</h4><ul style="margin:0;padding-left:20px">'+items.map(function(i){return '<li style="margin:4px 0">'+i+'</li>';}).join('')+'</ul>'; };
   var body='<p style="margin-top:0">El planificador arma el plan de estudios de cada estudiante, trimestre por trimestre, siguiendo los prerrequisitos y las reglas de PUPR.</p>'+
@@ -2746,6 +2746,7 @@ function renderPlan(){
       '<div class="menu"><button class="btn ghost" data-action="menu" aria-haspopup="true" aria-expanded="false">Más ▾</button><div class="menu-list" role="menu">'+
 
         (planWindow(edit).limited?'<button role="menuitem" data-action="add-term">Agregar trimestre</button>':'')+
+        '<button role="menuitem" data-action="open-audit">Ver currículo</button>'+
         '<button role="menuitem" data-action="cost-settings">Tarifas</button><hr>'+
         '<button role="menuitem" data-action="blank-plan">Empezar plan en blanco</button>'+
       '</div></div></div>';
