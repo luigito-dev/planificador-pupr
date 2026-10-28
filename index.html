@@ -2720,13 +2720,12 @@ function renderPlan(){
       '<button class="btn" data-action="email-plan">Enviar por correo</button>'+
       ((S.planEdited || S.planBeforeFill || (S.prevLoad && LOAD_KEYS.some(function(k){ return S.prevLoad[k]!==S.plannerRules[k]; })) || canUndoProgram())?'<button class="btn" data-action="restore">Restaurar</button>':'')+
       '<span class="spacer"></span>'+
-      '<button class="btn ghost danger" data-action="delete-plan" title="Borrar el plan o todo lo del estudiante">Borrar</button>'+
+      '<button class="btn ghost danger" data-action="delete-plan" title="Rehacer el plan desde cero, borrar el plan o todo lo del estudiante">Borrar</button>'+
       '<div class="menu"><button class="btn ghost" data-action="menu" aria-haspopup="true" aria-expanded="false">Más ▾</button><div class="menu-list" role="menu">'+
 
         (planWindow(edit).limited?'<button role="menuitem" data-action="add-term">Agregar trimestre</button>':'')+
         '<button role="menuitem" data-action="cost-settings">Tarifas</button><hr>'+
         '<button role="menuitem" data-action="blank-plan">Empezar plan en blanco</button>'+
-        '<button role="menuitem" data-action="regen-fresh">Hacer el plan de cero</button>'+
       '</div></div></div>';
     var loadIn='<div class="loadbar"><label>Créditos <select id="loadCr">'+credOpts.map(function(v){return '<option'+(v===Core.num(pr.maxCredits)?' selected':'')+'>'+v+'</option>';}).join('')+(credOpts.indexOf(Core.num(pr.maxCredits))<0?'<option selected>'+pr.maxCredits+'</option>':'')+'</select></label>'+
       '<label>Clases <select id="loadCl">'+clsOpts.map(function(v){return '<option value="'+v+'"'+(v===(Core.num(pr.maxCourses)||0)?' selected':'')+'>'+(v?v:'Sin límite')+'</option>';}).join('')+'</select></label>'+
@@ -4515,11 +4514,13 @@ function clearAll(){
 /** Borrar desde la vista del plan: solo el plan (se puede deshacer) o todo lo del estudiante. */
 function openDeletePlan(){
   var nm=S.student.name||'este estudiante';
-  modal({title:'Borrar', narrow:true,
-    body:'<div class="checklist"><label><input type="radio" name="dp" value="plan" checked><span><strong>Solo el plan</strong><br><span class="small muted">Se quitan todos los trimestres. Se quedan el historial, el GPA y las notas. Puedes deshacerlo enseguida.</span></span></label>'+
+  var dm=modal({title:'Borrar o rehacer', narrow:true,
+    body:'<div class="checklist"><label><input type="radio" name="dp" value="fresh"><span><strong>Rehacer el plan desde cero</strong><br><span class="small muted">El sistema hace un plan nuevo con todas las reglas, sin los cambios a mano ni los cursos fijos. Se quedan el historial, el GPA y las notas. Puedes deshacerlo con Restaurar.</span></span></label>'+
+      '<label><input type="radio" name="dp" value="plan" checked><span><strong>Solo el plan</strong><br><span class="small muted">Se quitan todos los trimestres. Se quedan el historial, el GPA y las notas. Puedes deshacerlo enseguida.</span></span></label>'+
       '<label><input type="radio" name="dp" value="student"><span><strong>Todo lo de '+esc(nm)+'</strong><br><span class="small muted">Plan, historial, notas y datos. También sale de la lista de estudiantes. No se puede deshacer.</span></span></label></div>',
     buttons:[{label:'Cancelar'},{label:'Borrar',primary:true,danger:true,onClick:function(b){
       var v=b.querySelector('input[name=dp]:checked').value;
+      if(v==='fresh'){ var prev=clone(S.plan); session.editMode=false; regenerate(false,{fresh:true}); S.planBeforeFill=prev; save(); renderAll(); toast('Plan rehecho desde cero.'); return; }
       if(v==='plan'){
         session.deletedPlan={plan:clone(S.plan), planOriginal:S.planOriginal?clone(S.planOriginal):null, planEdited:S.planEdited, planBeforeFill:S.planBeforeFill?clone(S.planBeforeFill):null};
         S.plan=null; S.planOriginal=null; S.planEdited=false; S.historyChanged=false; S.planBeforeFill=null;
@@ -4529,6 +4530,8 @@ function openDeletePlan(){
         session.pdfData=null; session.editMode=false; session.tab='plan'; session.deletedPlan=null; save(); renderAll(); toast('Se borró todo lo del estudiante.');
       }
     }}]});
+  var okB=dm.el.querySelector('footer .btn.primary');
+  dm.body.addEventListener('change',function(){ var v=dm.body.querySelector('input[name=dp]:checked').value; okB.textContent=v==='fresh'?'Rehacer':'Borrar'; okB.classList.toggle('danger', v!=='fresh'); });
 }
 function undoDeletePlan(){
   var d=session.deletedPlan; if(!d) return;
