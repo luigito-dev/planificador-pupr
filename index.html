@@ -2696,7 +2696,7 @@ function wizardHTML(){
     '</ol><p class="small muted" style="margin:10px 0 0">¿Dudas? Toca <strong>Ayuda</strong> arriba a la derecha.</p></div>';
 }
 /* ---------------- Ayuda ---------------- */
-var APP_VERSION='30 oct 2026 · 3:30 pm';
+var APP_VERSION='30 oct 2026 · 5:40 pm';
 function openHelp(){
   var sec=function(t,items){ return '<h4 style="margin:16px 0 6px">'+t+'</h4><ul style="margin:0;padding-left:20px">'+items.map(function(i){return '<li style="margin:4px 0">'+i+'</li>';}).join('')+'</ul>'; };
   var body='<p style="margin-top:0">El planificador arma el plan de estudios de cada estudiante, trimestre por trimestre, siguiendo los prerrequisitos y las reglas de PUPR.</p>'+
@@ -2987,7 +2987,7 @@ function sendPlanPDF(em, subj){
         },600);
       });
     }
-  },{missing:true, notes:true, title:'Enviar el plan en PDF', okLabel:'Preparar correo',
+  },{missing:true, notes:true, costs:true, title:'Enviar el plan en PDF', okLabel:'Preparar correo',
      intro:'<p class="small muted" style="margin-top:0">El PDF sale igual que al descargarlo.</p>'});
 }
 function openEmailSummary(){
@@ -4325,7 +4325,8 @@ var SIGNER_DEFAULT={name:'', title:'Consejero en Rehabilitación', dept:'Centro 
 function askPDF(fn, opts){
   opts=opts||{};
   var sg=Object.assign({}, SIGNER_DEFAULT, S.signer||{}), on=!!S.signOn, nMiss=opts.missing?missingCourses().length:0, hasNotes=!!(opts.notes && S.notes && S.notes.trim());
-  var body=(hasNotes?'<div class="checklist" style="margin-bottom:8px"><label><input type="checkbox" data-notes'+(S.notesOn?' checked':'')+'><span><strong>Incluir las notas del consejero</strong><br><span class="small muted">Lo que escribiste en la pestaña Notas.</span></span></label></div>':'')+(nMiss?'<div class="checklist" style="margin-bottom:8px"><label><input type="checkbox" data-miss'+(S.missOn===false?'':' checked')+'><span><strong>Incluir los cursos que faltan por planificar ('+nMiss+')</strong><br><span class="small muted">Lista al final con los cursos que todavía no están en ningún trimestre.</span></span></label></div>':'')+'<div class="checklist"><label><input type="checkbox" data-sg-on'+(on?' checked':'')+'><span><strong>Incluir firma del consejero al final</strong><br><span class="small muted">Añade espacio para firmar y la fecha.</span></span></label></div>'+
+  var costBox=opts.costs?'<div class="checklist" style="margin-bottom:8px"><label><input type="checkbox" data-costs'+(S.costsPdfOn?' checked':'')+'><span><strong>Incluir el costo aproximado por trimestre</strong><br><span class="small muted">Sale junto a cada trimestre, con una nota de que es aproximado.</span></span></label></div>':'';
+  var body=costBox+(hasNotes?'<div class="checklist" style="margin-bottom:8px"><label><input type="checkbox" data-notes'+(S.notesOn?' checked':'')+'><span><strong>Incluir las notas del consejero</strong><br><span class="small muted">Lo que escribiste en la pestaña Notas.</span></span></label></div>':'')+(nMiss?'<div class="checklist" style="margin-bottom:8px"><label><input type="checkbox" data-miss'+(S.missOn===false?'':' checked')+'><span><strong>Incluir los cursos que faltan por planificar ('+nMiss+')</strong><br><span class="small muted">Lista al final con los cursos que todavía no están en ningún trimestre.</span></span></label></div>':'')+'<div class="checklist"><label><input type="checkbox" data-sg-on'+(on?' checked':'')+'><span><strong>Incluir firma del consejero al final</strong><br><span class="small muted">Añade espacio para firmar y la fecha.</span></span></label></div>'+
     '<div data-sg-fields style="margin-top:12px"'+(on?'':' class="hidden"')+'>'+
     '<label class="field">Nombre del consejero (opcional)<input data-sg="name" value="'+esc(sg.name)+'" placeholder="Ej. Luis Rivera"></label>'+
     '<label class="field">Puesto<input data-sg="title" value="'+esc(sg.title)+'"></label>'+
@@ -4336,9 +4337,10 @@ function askPDF(fn, opts){
     var mb=b.querySelector('[data-miss]'); if(mb){ S.missOn=mb.checked; }
     var nb=b.querySelector('[data-notes]'); if(nb){ S.notesOn=nb.checked; }
     session.includeNotes=!!(nb && nb.checked);
+    var cbx=b.querySelector('[data-costs]'); if(cbx){ S.costsPdfOn=cbx.checked; } session.includeCosts=!!(cbx && cbx.checked);
     S.signOn=chk; S.signer=nv; save();
     session.sign=chk; session.includeMissing=!!(mb && mb.checked);
-    try{ fn(); } finally { session.sign=false; session.includeMissing=false; session.includeNotes=false; }
+    try{ fn(); } finally { session.sign=false; session.includeMissing=false; session.includeNotes=false; session.includeCosts=false; }
   }}]});
   var cb=m.body.querySelector('[data-sg-on]'), fl=m.body.querySelector('[data-sg-fields]');
   cb.addEventListener('change',function(){ fl.classList.toggle('hidden', !cb.checked); });
@@ -4432,14 +4434,15 @@ function exportPlanPDF(opts){
   doc.setFontSize(8.5); doc.setFont('helvetica','normal'); doc.setTextColor(100,110,120); doc.text('Prerrequisitos:', 54, y-6);
   [['completado','done'],['en progreso','ip'],['pendiente','pend']].forEach(function(l,i){ doc.setFont('helvetica','bold'); doc.setTextColor.apply(doc,hexRGB(PRE_COLORS[l[1]])); doc.text(l[0], 118+i*68, y-6); });
   y+=16;
-  var winP=planWindow(false);
+  var winP=planWindow(false), pdfCostAny=false;
   S.plan.terms.forEach(function(t,ti){
     if(winP.idx.indexOf(ti)<0) return;
     if(y>660){ doc.addPage(); y=LH_TOP+10; }
     doc.setFont('helvetica','bold'); doc.setFontSize(11.5); doc.setTextColor(28,42,57);
     doc.text(tS(t.label), 54, y);
     doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(100,110,120);
-    doc.text(fmtCr(Core.termCredits(t))+' créditos', 612-54, y, {align:'right'});
+    var pc=session.includeCosts?termCost(t):null; if(pc) pdfCostAny=true;
+    doc.text(fmtCr(Core.termCredits(t))+' créditos'+(pc?'  ·  Costo aprox. '+money(pc.total):''), 612-54, y, {align:'right'});
     doc.autoTable(Object.assign({}, TABLE_STYLE, {startY:y+6,
       head:[['Curso','Descripción','Créditos','Estado/Nota','Prerrequisito']],
       body:t.courses.map(function(c){ var eg=planElecGroup(c,curP,sgP); return [c.code, pdfSafe(c.name)+(eg?' ['+elecKind(eg)[1]+']':'')+(c.placeholder?' (por seleccionar)':''), fmtCr(c.credits), c.grade||'', pdfSafe(prereqParts(c,stPdf).map(function(p){return p.t;}).join(''))]; }),
@@ -4453,6 +4456,12 @@ function exportPlanPDF(opts){
     }));
     y=doc.lastAutoTable.finalY+24;
   });
+  if(pdfCostAny){
+    if(y>690){ doc.addPage(); y=LH_TOP+10; }
+    doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(100,110,120);
+    doc.splitTextToSize(pdfSafe('Costo aproximado por trimestre: matrícula por crédito, cuota general y cargos de laboratorio'+(costCat(costCfg())==='arch'?' y diseño':'')+', según '+costSourceText()+'. No incluye otros cargos, libros, ni ayudas económicas o becas.'), 612-108).forEach(function(l){ doc.text(l,54,y); y+=10; });
+    y+=14;
+  }
   var missP=session.includeMissing?missingCourses():[];
   if(missP.length){
     if(y>640){ doc.addPage(); y=LH_TOP+10; }
@@ -4759,7 +4768,7 @@ document.addEventListener('click',function(e){
   else if(a==='electives-pending') openElectives(null,{pendingOnly:true});
   else if(a==='preps') openPreps();
   else if(a==='view-transcript') viewTranscript();
-  else if(a==='pdf-plan') askPDF(function(){ exportPlanPDF(); },{missing:true,notes:true});
+  else if(a==='pdf-plan') askPDF(function(){ exportPlanPDF(); },{missing:true,notes:true,costs:true});
   else if(a==='pdf-transcript') askPDF(exportTranscriptPDF);
   else if(a==='edit-course') openCourseEditor(btn.closest('[data-uid]').getAttribute('data-uid'));
   else if(a==='edit-term') openTermEditor(+btn.closest('.term').getAttribute('data-term'));
