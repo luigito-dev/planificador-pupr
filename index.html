@@ -2727,7 +2727,7 @@ function wizardHTML(){
     '</ol><p class="small muted" style="margin:10px 0 0">¿Dudas? Toca <strong>Ayuda</strong> arriba a la derecha.</p></div>';
 }
 /* ---------------- Ayuda ---------------- */
-var APP_VERSION='31 oct 2026 · 4:25 pm';
+var APP_VERSION='31 oct 2026 · 4:40 pm';
 function openHelp(){
   var sec=function(t,items){ return '<h4 style="margin:16px 0 6px">'+t+'</h4><ul style="margin:0;padding-left:20px">'+items.map(function(i){return '<li style="margin:4px 0">'+i+'</li>';}).join('')+'</ul>'; };
   var body='<p style="margin-top:0">El planificador arma el plan de estudios de cada estudiante, trimestre por trimestre, siguiendo los prerrequisitos y las reglas de PUPR.</p>'+
@@ -2965,10 +2965,22 @@ function schTermKey(t){ return t.season+' '+t.year; }
 function schTerms(){ if(!S.plan) return []; return S.plan.terms.map(function(t,i){ return {t:t,i:i}; }).filter(function(x){ return x.t.courses.length; }); }
 function schDefaultIdx(){ var L=schTerms(); if(!L.length) return -1; var nx=L.filter(function(x){ return !x.t.courses.every(function(c){ return c.grade || c.fixed; }); })[0]; return (nx||L[0]).i; }
 /** Opciones de horario de una clase: [{days,start,end,sec}, ...]. Convierte el formato anterior (una sola). */
+// Se guarda por CÓDIGO de la clase (no por la fila del plan), para que no se pierda cuando el plan se rehace,
+// se cambia el currículo o se acomoda automáticamente.
+function schCodeOf(uid){ if(!S.plan) return null; for(var i=0;i<S.plan.terms.length;i++){ var c=S.plan.terms[i].courses.filter(function(x){ return x.uid===uid; })[0]; if(c) return c.code; } return null; }
+function schNorm(v){ if(!v) return null; if(Array.isArray(v.opts)) return v; return {opts:[{days:v.days||[],start:v.start||'',end:v.end||'',sec:v.sec||''}]}; }
 function schOpts(key, uid, create){
-  S.schedule=S.schedule||{}; var m=S.schedule[key]=S.schedule[key]||{}, v=m[uid];
-  if(v && !Array.isArray(v.opts)) v=m[uid]={opts:[{days:v.days||[],start:v.start||'',end:v.end||'',sec:v.sec||''}]};
-  if(!v){ if(!create) return [{days:[],start:'',end:'',sec:''}]; v=m[uid]={opts:[{days:[],start:'',end:'',sec:''}]}; }
+  S.schedule=S.schedule||{}; var m=S.schedule[key]=S.schedule[key]||{}, code=schCodeOf(uid)||uid, ck='c:'+code;
+  if(!m[ck] && m[uid]){ m[ck]=schNorm(m[uid]); delete m[uid]; }          // formato anterior (por fila)
+  var v=m[ck];
+  if(v && !Array.isArray(v.opts)) v=m[ck]=schNorm(v);
+  if(!v){
+    // Si la clase cambió de trimestre al rehacer el plan, se usan los horarios que ya tenía en el otro trimestre.
+    var other=null; Object.keys(S.schedule).forEach(function(k){ if(!other && k!==key && S.schedule[k] && S.schedule[k][ck]) other=schNorm(S.schedule[k][ck]); });
+    if(other){ if(!create) return other.opts; v=m[ck]=JSON.parse(JSON.stringify(other)); return v.opts; }
+    if(!create) return [{days:[],start:'',end:'',sec:''}];
+    v=m[ck]={opts:[{days:[],start:'',end:'',sec:''}]};
+  }
   return v.opts;
 }
 function hm(s){ var m=/^(\d{1,2}):(\d{2})/.exec(s||''); return m? (+m[1])*60+(+m[2]) : null; }
@@ -2986,7 +2998,7 @@ function schComplete(o){ return o && o.days.length && hm(o.start)!=null && hm(o.
 function schOverlap(A,B){ return A.days.some(function(d){ return B.days.indexOf(d)>=0; }) && hm(A.start)<hm(B.end) && hm(B.start)<hm(A.end); }
 /** Clases quitadas solo del horario (siguen en el plan). */
 function schHidden(key){ S.schedule=S.schedule||{}; var m=S.schedule[key]=S.schedule[key]||{}; return m.__hidden=m.__hidden||[]; }
-function schCourses(t,key){ var h=((S.schedule||{})[key]||{}).__hidden||[]; return t.courses.filter(function(c){ return h.indexOf(c.uid)<0; }); }
+function schCourses(t,key){ var h=((S.schedule||{})[key]||{}).__hidden||[]; return t.courses.filter(function(c){ return h.indexOf('c:'+c.code)<0 && h.indexOf(c.uid)<0; }); }
 /** Choques: una opción choca si coincide con una clase que tiene un solo horario. */
 function schClashes(t, key){
   var out={}, CS=schCourses(t,key);
@@ -3106,8 +3118,8 @@ function openRemoveScheduleCourse(uid){
     '<label><input type="radio" name="rmc" value="plan"><span><strong>Del horario y del plan</strong><br><span class="small muted">Sale de '+esc(tS(T.label))+'. Si la necesita, quedará en "cursos que faltan".</span></span></label></div>',
     buttons:[{label:'Cancelar'},{label:'Quitar',primary:true,danger:true,onClick:function(b){
       var v=b.querySelector('input[name=rmc]:checked').value;
-      if(v==='sch'){ var h=schHidden(key); if(h.indexOf(uid)<0) h.push(uid); toast(c.code+' quitada del horario.'); }
-      else { T.courses=T.courses.filter(function(x){ return x.uid!==uid; }); if(S.schedule&&S.schedule[key]) delete S.schedule[key][uid]; S.planEdited=true; toast(c.code+' quitada del horario y del plan.'); }
+      if(v==='sch'){ var h=schHidden(key); if(h.indexOf('c:'+c.code)<0) h.push('c:'+c.code); toast(c.code+' quitada del horario.'); }
+      else { T.courses=T.courses.filter(function(x){ return x.uid!==uid; }); if(S.schedule&&S.schedule[key]){ delete S.schedule[key][uid]; delete S.schedule[key]['c:'+c.code]; } S.planEdited=true; toast(c.code+' quitada del horario y del plan.'); }
       save(); renderSchedule();
     }}]});
 }
