@@ -220,6 +220,9 @@ pre.raw{white-space:pre-wrap;font-size:12px;background:var(--soft);padding:12px;
 .schtbl tr.schadd td{padding:4px 10px 8px}
 .schtbl .schnum{color:var(--muted);font-size:13px;padding-left:18px;white-space:nowrap}
 .schprof{width:150px}
+.addlist{max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:8px}
+.addrow{display:block;width:100%;text-align:left;padding:8px 10px;border:0;border-bottom:1px solid var(--line);background:var(--paper);font:inherit;font-size:13.5px;color:var(--ink);cursor:pointer}
+.addrow:hover{background:var(--accent-soft)}
 .days.ro{border:1px solid #9aa3ad}.days.ro span{width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;border-right:1px solid #9aa3ad;color:var(--muted)}.days.ro span:last-child{border-right:0}.days.ro span.on{background:#0d4f8b;color:#fff;font-weight:700}
 .ocrtbl td{font-size:13px}.ocrtbl select{font:inherit;font-size:13px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;width:auto}
 .schtime select{font:inherit;font-size:13px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:var(--paper);color:var(--ink);width:auto}
@@ -2723,7 +2726,7 @@ function wizardHTML(){
     '</ol><p class="small muted" style="margin:10px 0 0">¿Dudas? Toca <strong>Ayuda</strong> arriba a la derecha.</p></div>';
 }
 /* ---------------- Ayuda ---------------- */
-var APP_VERSION='31 oct 2026 · 3:45 pm';
+var APP_VERSION='31 oct 2026 · 4:10 pm';
 function openHelp(){
   var sec=function(t,items){ return '<h4 style="margin:16px 0 6px">'+t+'</h4><ul style="margin:0;padding-left:20px">'+items.map(function(i){return '<li style="margin:4px 0">'+i+'</li>';}).join('')+'</ul>'; };
   var body='<p style="margin-top:0">El planificador arma el plan de estudios de cada estudiante, trimestre por trimestre, siguiendo los prerrequisitos y las reglas de PUPR.</p>'+
@@ -3004,7 +3007,7 @@ function renderSchedule(){
     '<span class="spill act">'+fmtCr(Core.termCredits(t))+' créditos</span>'+
     (noSch?'<span class="spill warn">'+noSch+' clase'+(noSch>1?'s':'')+' sin horario</span>':'<span class="spill on">Todas tienen horario</span>')+
     (nClash?'<span class="spill warn bad">'+nClash+' opci'+(nClash>1?'ones chocan':'ón choca')+'</span>':'')+
-    '<span class="spacer"></span><button class="btn sm" data-action="sch-img">Subir imagen de horarios</button><button class="btn sm" data-action="sch-pdf">Descargar PDF</button></div>';
+    '<span class="spacer"></span><button class="btn sm" data-action="sch-addc">+ Añadir clase</button><button class="btn sm" data-action="sch-img">Subir imagen de horarios</button><button class="btn sm" data-action="sch-pdf">Descargar PDF</button></div>';
   html+='<div class="schwrap"><table class="schtbl"><thead><tr><th style="width:96px"></th><th>Sección</th><th>Profesor</th><th>Días</th><th>Hora</th><th></th></tr></thead><tbody>';
   t.courses.forEach(function(c){
     var opts=schOpts(key,c.uid);
@@ -3055,6 +3058,42 @@ function exportSchedulePDF(){
   saveFile(fileBase()+' - Horario '+tS(t.label)+'.pdf', doc.output('blob'));
 }
 
+
+/** Pone una clase en un trimestre (desde Horario): si ya está en el plan se mueve; si no está en el currículo, se añade como clase nueva. Devuelve su uid. */
+function addCourseToTerm(ti, info){
+  var T=S.plan.terms[ti], code=Core.normCode(info.code);
+  var here=T.courses.filter(function(c){ return c.code===code; })[0]; if(here) return here.uid;
+  var cu=curr(), inCur=cu && cu.courses.some(function(x){ return x.code===code && x.type!=='ELEC'; });
+  if(findCourseByCode(code) || inCur){ includeCourse(code, ti); }
+  else T.courses.push({uid:Core.uid(), code:code, name:info.name||'', credits:Core.num(info.credits)||3, type:'EXT', prereqs:[], coreqs:[], prereqText:'', grade:'', placeholder:false, fixed:false, pinned:true, custom:true});
+  S.planEdited=true;
+  var c=T.courses.filter(function(x){ return x.code===code; })[0]; return c?c.uid:null;
+}
+var SUBJ_CODES={SPANISH:'SPAN',ENGLISH:'ENGL',MATHEMATICS:'MATH',MATH:'MATH',SCIENCE:'SCIE',SCIENCES:'SCIE',HISTORY:'HIST',PSYCHOLOGY:'PSYC',ECONOMICS:'ECON',LITERATURE:'LITE',LANGUAGE:'LANG',LANGUAGES:'LANG',HUMANITIES:'SOHU',SOCIOHUMANISTIC:'SOHU',MANAGEMENT:'MGMT',ACCOUNTING:'ACCO',MARKETING:'MARK',FINANCE:'FINA',ENGINEERING:'ENGI',ARCHITECTURE:'ARCH'};
+function guessCode(subj, num){ var s=String(subj||'').toUpperCase().replace(/[^A-Z]/g,''); return (SUBJ_CODES[s]||s.slice(0,4)||'CURS')+' '+num; }
+function titleCase(s){ return String(s||'').toLowerCase().replace(/\b([a-záéíóúñ])/g,function(m){ return m.toUpperCase(); }).replace(/\b(Of|And|For|The|In|To|A)\b/g,function(m){ return m.toLowerCase(); }).replace(/^./,function(m){ return m.toUpperCase(); }); }
+function openAddScheduleCourse(){
+  var ti=session.schIdx, T=S.plan.terms[ti]; if(!T) return;
+  var cu=curr(), st=cu?Core.buildStatus(cu,S.records,S.plannerRules):null;
+  var list=(cu?cu.courses:[]).filter(function(c){ return c.type!=='ELEC' && !T.courses.some(function(x){ return x.code===c.code; }); });
+  var body='<label class="field">Buscar en el currículo<input data-q placeholder="Código o nombre, por ejemplo SPAN 2020"></label><div data-l class="addlist"></div>'+
+    '<h4 style="margin:14px 0 6px;font-size:14px">¿No está en el currículo? Escríbela</h4><div class="row"><input data-nc placeholder="Código" style="width:110px"><input data-nn placeholder="Nombre" style="flex:1;min-width:140px"><input data-ncr placeholder="Cr" inputmode="decimal" style="width:60px"><button class="btn" data-nadd>Añadir</button></div>';
+  var m=modal({title:'Añadir clase a '+tS(T.label), body:body, buttons:[{label:'Cerrar',primary:true}]});
+  function done(code){ save(); renderSchedule(); toast(code+' añadida a '+tS(T.label)+'.'); m.close(); }
+  function draw(){
+    var q=m.body.querySelector('[data-q]').value.trim().toUpperCase();
+    var L=list.filter(function(c){ return !q || c.code.indexOf(q)>=0 || String(c.name||'').toUpperCase().indexOf(q)>=0; }).slice(0,40);
+    m.body.querySelector('[data-l]').innerHTML=L.length?L.map(function(c){
+      var w=findCourseByCode(c.code), ap=st&&st.approved[c.code];
+      return '<button class="addrow" data-code="'+esc(c.code)+'"><strong>'+esc(c.code)+'</strong> '+esc(c.name||'')+' <span class="muted">· '+fmtCr(c.credits)+' cr'+(w?' · está en '+esc(tS(S.plan.terms[w.ti].label))+' (se moverá aquí)':'')+(ap?' · ya aprobada':'')+'</span></button>'; }).join(''):'<p class="small muted">No hay clases que coincidan.</p>';
+  }
+  draw();
+  m.body.querySelector('[data-q]').addEventListener('input',draw);
+  m.body.querySelector('[data-l]').addEventListener('click',function(e){ var b=e.target.closest('[data-code]'); if(!b) return; var code=b.getAttribute('data-code'); addCourseToTerm(ti,{code:code}); done(code); });
+  m.body.querySelector('[data-nadd]').addEventListener('click',function(e){ e.preventDefault();
+    var code=m.body.querySelector('[data-nc]').value.trim(); if(!Core.isCourseCode(code)){ toast('Escribe un código válido, por ejemplo HIST 3111.'); return; }
+    code=Core.normCode(code); addCourseToTerm(ti,{code:code, name:m.body.querySelector('[data-nn]').value.trim(), credits:m.body.querySelector('[data-ncr]').value}); done(code); });
+}
 /* ---------------- Leer horarios desde una imagen (captura de la oferta de secciones) ---------------- */
 var TESS_V='5.1.1';
 function loadTesseract(){
@@ -3177,15 +3216,16 @@ function openScheduleImage(){
   var rows=null;
   var m=modal({title:'Leer horarios de una imagen', wide:true, body:body, buttons:[{label:'Cancelar'},{label:'Añadir al horario',primary:true,onClick:function(b){
     if(!rows||!rows.length){ toast('Primero escoge una imagen.'); return false; }
-    var n=0;
+    var n=0, added=0;
     b.querySelectorAll('[data-ri]').forEach(function(tr){
       var r=rows[+tr.getAttribute('data-ri')], uid=tr.querySelector('[data-rc]').value; if(!uid || !tr.querySelector('[data-ron]').checked) return;
+      if(uid.indexOf('add:')===0){ var cd=uid.slice(4), had=S.plan.terms[session.schIdx].courses.some(function(x){ return x.code===Core.normCode(cd); }); uid=addCourseToTerm(session.schIdx,{code:cd, name:r.newName||'', credits:r.cr}); if(!uid) return; if(!had) added++; }
       var opts=schOpts(key,uid,true), o={days:r.days.slice(),start:r.start,end:r.end,sec:r.sec,prof:r.prof};
       if(opts.some(function(x){ return x.sec===o.sec && x.start===o.start && x.days.join()===o.days.join(); })) return;
       if(opts.length===1 && !opts[0].days.length && !opts[0].start && !opts[0].sec) opts[0]=o; else opts.push(o);
       n++;
     });
-    save(); renderSchedule(); toast(n?n+' horario'+(n>1?'s':'')+' añadido'+(n>1?'s':'')+'.':'No se añadió ningún horario.');
+    save(); renderSchedule(); toast(n?n+' horario'+(n>1?'s':'')+' añadido'+(n>1?'s':'')+(added?' ('+added+' clase'+(added>1?'s':'')+' nueva'+(added>1?'s':'')+' en el trimestre)':'')+'.':'No se añadió ningún horario.');
   }}]});
   var out=m.body.querySelector('[data-out]'), inp=m.body.querySelector('[data-file]');
   function dayStr(a){ return SCH_DAYS.map(function(d,i){ return '<span class="'+(a.indexOf(i)>=0?'on':'')+'">'+d[0]+'</span>'; }).join(''); }
@@ -3198,9 +3238,11 @@ function openScheduleImage(){
       out.innerHTML='<p class="small" style="margin:0 0 8px">Se encontraron <strong>'+rs.length+'</strong> secciones. Revisa y escoge a qué clase va cada una.</p><div class="schwrap"><table class="schtbl ocrtbl"><thead><tr><th></th><th>Leído</th><th>Clase</th><th>Sección</th><th>Profesor</th><th>Días</th><th>Hora</th></tr></thead><tbody>'+
         rs.map(function(r,i){
           var mt=matchOfferCourse(r,t.courses), inTerm=mt&&mt.uid;
-          var opts='<option value="">No añadir</option>'+t.courses.map(function(c){ return '<option value="'+esc(c.uid)+'"'+(inTerm&&mt.uid===c.uid?' selected':'')+'>'+esc(c.code)+'</option>'; }).join('');
-          return '<tr data-ri="'+i+'"><td><input type="checkbox" data-ron'+(inTerm?' checked':'')+'></td><td class="small">'+esc((r.subj||'')+' '+r.num)+'<br><span class="muted">'+esc(r.title||'')+'</span></td>'+
-            '<td><select data-rc>'+opts+'</select>'+(mt&&!inTerm?'<div class="small muted">'+esc(mt.code)+' no está en este trimestre</div>':'')+'</td><td>'+esc(r.sec)+'</td><td>'+esc(r.prof||'—')+'</td><td><span class="days ro">'+dayStr(r.days)+'</span></td><td class="tm">'+(r.start?fmt12(r.start)+' – '+fmt12(r.end):'—')+'</td></tr>';
+          var newCode=mt?mt.code:guessCode(r.subj,r.num); r.newName=mt?mt.name:titleCase(r.title);
+          var addOpt=inTerm?'':'<option value="add:'+esc(newCode)+'" selected>Añadir '+esc(newCode)+(mt?'':' (nueva)')+'</option>';
+          var opts='<option value="">No añadir</option>'+addOpt+t.courses.map(function(c){ return '<option value="'+esc(c.uid)+'"'+(inTerm&&mt.uid===c.uid?' selected':'')+'>'+esc(c.code)+'</option>'; }).join('');
+          return '<tr data-ri="'+i+'"><td><input type="checkbox" data-ron checked></td><td class="small">'+esc((r.subj||'')+' '+r.num)+'<br><span class="muted">'+esc(r.title||'')+'</span></td>'+
+            '<td><select data-rc>'+opts+'</select>'+(!inTerm?'<div class="small muted">'+(mt&&findCourseByCode(mt.code)?'Está en '+esc(tS(S.plan.terms[findCourseByCode(mt.code).ti].label))+'; se moverá aquí':mt?'No está en el plan; se añadirá':'No está en el currículo; se añadirá como clase nueva')+'</div>':'')+'</td><td>'+esc(r.sec)+'</td><td>'+esc(r.prof||'—')+'</td><td><span class="days ro">'+dayStr(r.days)+'</span></td><td class="tm">'+(r.start?fmt12(r.start)+' – '+fmt12(r.end):'—')+'</td></tr>';
         }).join('')+'</tbody></table></div>';
       out.querySelectorAll('[data-rc]').forEach(function(s){ s.addEventListener('change',function(){ s.closest('tr').querySelector('[data-ron]').checked=!!s.value; }); });
     }).catch(function(err){ out.innerHTML='<p style="color:var(--danger)">'+esc(err&&err.message||'No se pudo leer la imagen.')+'</p>'; });
@@ -5064,6 +5106,7 @@ document.addEventListener('click',function(e){
   else if(a==='review-open') openAlertsList();
   else if(a==='sch-pdf') askPDF(exportSchedulePDF);
   else if(a==='sch-img') openScheduleImage();
+  else if(a==='sch-addc') openAddScheduleCourse();
   else if(a==='sch-add'){ var oa=schOpts(schTermKey(S.plan.terms[session.schIdx]), btn.getAttribute('data-suid'), true); oa.push({days:[],start:'',end:'',sec:''}); save(); renderSchedule(); }
   else if(a==='sch-del'){ var trX=btn.closest('[data-suid]'), ox=schOpts(schTermKey(S.plan.terms[session.schIdx]), trX.getAttribute('data-suid'), true); if(ox.length>1){ ox.splice(+trX.getAttribute('data-oi'),1); save(); renderSchedule(); } }
   else if(a==='fix-plan') fixPlan();
