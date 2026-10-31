@@ -207,7 +207,7 @@ pre.raw{white-space:pre-wrap;font-size:12px;background:var(--soft);padding:12px;
 .schlbl{display:inline-flex;align-items:center;gap:8px;font-weight:700;font-size:16px}
 .schlbl select{font:inherit;font-weight:500;font-size:14px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);width:auto}
 .schwrap{overflow-x:auto;background:var(--paper);border:1px solid var(--line);border-radius:12px}
-.schtbl{width:100%;border-collapse:collapse;font-size:14px;min-width:720px}
+.schtbl{width:100%;border-collapse:collapse;font-size:14px;min-width:640px}
 .schtbl th{text-align:left;font-weight:500;color:var(--muted);font-size:12.5px;padding:9px 10px;border-bottom:1px solid var(--line);background:var(--soft)}
 .schtbl td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
 .schtbl tr:last-child td{border-bottom:0}
@@ -216,6 +216,10 @@ pre.raw{white-space:pre-wrap;font-size:12px;background:var(--soft);padding:12px;
 .schtbl tr.clash td{background:color-mix(in srgb,var(--danger) 7%,var(--paper))}
 .schclash{color:var(--danger);font-size:12px;margin-top:3px}
 .schsec{width:58px;font:inherit;font-size:13px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:var(--paper);color:var(--ink)}
+.schtbl tr.schhead td{background:var(--soft);padding:9px 10px}
+.schtbl tr.schadd td{padding:4px 10px 8px}
+.schtbl .schnum{color:var(--muted);font-size:13px;padding-left:18px;white-space:nowrap}
+.schtime select{font:inherit;font-size:13px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:var(--paper);color:var(--ink);width:auto}
 .schtime input{font:inherit;font-size:13px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:var(--paper);color:var(--ink);width:auto}
 .days{display:inline-flex;border:1px solid #9aa3ad}
 .days button{width:24px;height:24px;border:0;border-right:1px solid #9aa3ad;background:var(--paper);color:var(--muted);font:inherit;font-size:11.5px;cursor:pointer;padding:0}
@@ -2716,7 +2720,7 @@ function wizardHTML(){
     '</ol><p class="small muted" style="margin:10px 0 0">¿Dudas? Toca <strong>Ayuda</strong> arriba a la derecha.</p></div>';
 }
 /* ---------------- Ayuda ---------------- */
-var APP_VERSION='31 oct 2026 · 2:40 pm';
+var APP_VERSION='31 oct 2026 · 2:55 pm';
 function openHelp(){
   var sec=function(t,items){ return '<h4 style="margin:16px 0 6px">'+t+'</h4><ul style="margin:0;padding-left:20px">'+items.map(function(i){return '<li style="margin:4px 0">'+i+'</li>';}).join('')+'</ul>'; };
   var body='<p style="margin-top:0">El planificador arma el plan de estudios de cada estudiante, trimestre por trimestre, siguiendo los prerrequisitos y las reglas de PUPR.</p>'+
@@ -2948,71 +2952,93 @@ function fixPlan(){
   toast('Corregido: '+msg+'. Puedes deshacerlo con Restaurar.');
 }
 
-/* ---------------- Horario (días y horas por trimestre) ---------------- */
+/* ---------------- Horario (días y horas por trimestre, con varias opciones por clase) ---------------- */
 var SCH_DAYS=[['S','Domingo'],['M','Lunes'],['T','Martes'],['W','Miércoles'],['T','Jueves'],['F','Viernes'],['S','Sábado']];
 function schTermKey(t){ return t.season+' '+t.year; }
-function schTerms(){
-  if(!S.plan) return [];
-  return S.plan.terms.map(function(t,i){ return {t:t,i:i}; }).filter(function(x){ return x.t.courses.length; });
+function schTerms(){ if(!S.plan) return []; return S.plan.terms.map(function(t,i){ return {t:t,i:i}; }).filter(function(x){ return x.t.courses.length; }); }
+function schDefaultIdx(){ var L=schTerms(); if(!L.length) return -1; var nx=L.filter(function(x){ return !x.t.courses.every(function(c){ return c.grade || c.fixed; }); })[0]; return (nx||L[0]).i; }
+/** Opciones de horario de una clase: [{days,start,end,sec}, ...]. Convierte el formato anterior (una sola). */
+function schOpts(key, uid, create){
+  S.schedule=S.schedule||{}; var m=S.schedule[key]=S.schedule[key]||{}, v=m[uid];
+  if(v && !Array.isArray(v.opts)) v=m[uid]={opts:[{days:v.days||[],start:v.start||'',end:v.end||'',sec:v.sec||''}]};
+  if(!v){ if(!create) return [{days:[],start:'',end:'',sec:''}]; v=m[uid]={opts:[{days:[],start:'',end:'',sec:''}]}; }
+  return v.opts;
 }
-function schDefaultIdx(){
-  var L=schTerms(); if(!L.length) return -1;
-  var nx=L.filter(function(x){ return !x.t.courses.every(function(c){ return c.grade==='IP' || c.fixed || (c.grade && c.grade!=='IP'); }); })[0];
-  return (nx||L[0]).i;
-}
-function schEntry(key, uid){ S.schedule=S.schedule||{}; var m=S.schedule[key]=S.schedule[key]||{}; return m[uid]=m[uid]||{days:[],start:'',end:'',sec:''}; }
 function hm(s){ var m=/^(\d{1,2}):(\d{2})/.exec(s||''); return m? (+m[1])*60+(+m[2]) : null; }
 function fmt12(s){ var v=hm(s); if(v==null) return ''; var h=Math.floor(v/60), mi=v%60, ap=h>=12?'PM':'AM'; h=h%12||12; return ('0'+h).slice(-2)+':'+('0'+mi).slice(-2)+' '+ap; }
-/** Pares de clases que chocan (mismo día y horas que se solapan). */
-function schClashes(t, map){
+function hhmm(v){ return ('0'+Math.floor(v/60)).slice(-2)+':'+('0'+(v%60)).slice(-2); }
+// Bloques de 30 minutos: inicio a la hora o y media; fin a :29 o :59.
+var SCH_STARTS=[], SCH_ENDS=[];
+for(var _m=7*60;_m<=21*60+30;_m+=30) SCH_STARTS.push(hhmm(_m));
+for(var _n=7*60+59;_n<=22*60+59;_n+=30) SCH_ENDS.push(hhmm(_n));
+function schSelect(field, val, list, label){
+  var has=!val || list.indexOf(val)>=0;
+  return '<select data-sf="'+field+'" aria-label="'+label+'"><option value="">—</option>'+(has?'':'<option value="'+esc(val)+'" selected>'+fmt12(val)+'</option>')+list.map(function(v){ return '<option value="'+v+'"'+(v===val?' selected':'')+'>'+fmt12(v)+'</option>'; }).join('')+'</select>';
+}
+function schComplete(o){ return o && o.days.length && hm(o.start)!=null && hm(o.end)!=null; }
+function schOverlap(A,B){ return A.days.some(function(d){ return B.days.indexOf(d)>=0; }) && hm(A.start)<hm(B.end) && hm(B.start)<hm(A.end); }
+/** Choques: una opción choca si coincide con una clase que tiene un solo horario. */
+function schClashes(t, key){
   var out={};
-  var L=t.courses.map(function(c){ return {c:c, e:map[c.uid]}; }).filter(function(x){ return x.e && x.e.days.length && hm(x.e.start)!=null && hm(x.e.end)!=null; });
-  for(var a=0;a<L.length;a++) for(var b=a+1;b<L.length;b++){
-    var A=L[a].e, B=L[b].e;
-    if(!A.days.some(function(d){ return B.days.indexOf(d)>=0; })) continue;
-    if(hm(A.start)<hm(B.end) && hm(B.start)<hm(A.end)){ (out[L[a].c.uid]=out[L[a].c.uid]||[]).push(L[b].c.code); (out[L[b].c.uid]=out[L[b].c.uid]||[]).push(L[a].c.code); }
-  }
+  t.courses.forEach(function(c){
+    schOpts(key,c.uid).forEach(function(o,oi){
+      if(!schComplete(o)) return;
+      t.courses.forEach(function(d){
+        if(d.uid===c.uid) return; var od=schOpts(key,d.uid);
+        if(od.length===1 && schComplete(od[0]) && schOverlap(o,od[0])) (out[c.uid+'|'+oi]=out[c.uid+'|'+oi]||[]).push(d.code);
+      });
+    });
+  });
   return out;
 }
 function renderSchedule(){
-  var el=$('panel');
-  var L=schTerms();
+  var el=$('panel'), L=schTerms();
   if(!L.length){ el.innerHTML='<p class="muted">Primero haz el plan académico. El horario se arma con las clases de cada trimestre.</p>'; return; }
   if(session.schIdx==null || !S.plan.terms[session.schIdx] || !S.plan.terms[session.schIdx].courses.length) session.schIdx=schDefaultIdx();
-  var t=S.plan.terms[session.schIdx], key=schTermKey(t), map=(S.schedule||{})[key]||{};
-  var clash=schClashes(t,map), noSch=t.courses.filter(function(c){ var e=map[c.uid]; return !(e && e.days.length && e.start && e.end); }).length;
-  var nClash=Object.keys(clash).length;
+  var t=S.plan.terms[session.schIdx], key=schTermKey(t), clash=schClashes(t,key);
+  var noSch=t.courses.filter(function(c){ return !schOpts(key,c.uid).some(schComplete); }).length, nClash=Object.keys(clash).length;
   var html='<div class="schbar"><label class="schlbl">Horario de <select id="schTerm">'+L.map(function(x){ return '<option value="'+x.i+'"'+(x.i===session.schIdx?' selected':'')+'>'+esc(tS(x.t.label))+'</option>'; }).join('')+'</select></label>'+
     '<span class="spill act">'+fmtCr(Core.termCredits(t))+' créditos</span>'+
-    (noSch?'<span class="spill warn">'+noSch+' clase'+(noSch>1?'s':'')+' sin horario</span>':'<span class="spill on">Horario completo</span>')+
-    (nClash?'<span class="spill warn bad">'+nClash+' clases chocan</span>':'')+
+    (noSch?'<span class="spill warn">'+noSch+' clase'+(noSch>1?'s':'')+' sin horario</span>':'<span class="spill on">Todas tienen horario</span>')+
+    (nClash?'<span class="spill warn bad">'+nClash+' opci'+(nClash>1?'ones chocan':'ón choca')+'</span>':'')+
     '<span class="spacer"></span><button class="btn sm" data-action="sch-pdf">Descargar PDF</button></div>';
-  html+='<div class="schwrap"><table class="schtbl"><thead><tr><th>Curso</th><th>Descripción</th><th class="num">Cr</th><th>Sección</th><th>Días</th><th>Hora</th></tr></thead><tbody>'+
-    t.courses.map(function(c){
-      var e=map[c.uid]||{days:[],start:'',end:'',sec:''}, cl=clash[c.uid];
-      return '<tr data-suid="'+esc(c.uid)+'"'+(cl?' class="clash" title="Choca con '+esc(cl.join(', '))+'"':'')+'>'+
-        '<td><strong>'+esc(c.code)+'</strong>'+(c.grade==='IP'?' <span class="tag">IP</span>':'')+'</td><td class="schname">'+esc(c.name||'')+'</td><td class="num">'+fmtCr(c.credits)+'</td>'+
-        '<td><input class="schsec" data-sf="sec" value="'+esc(e.sec||'')+'" placeholder="—" aria-label="Sección de '+esc(c.code)+'"></td>'+
-        '<td><span class="days" role="group" aria-label="Días de '+esc(c.code)+'">'+SCH_DAYS.map(function(d,i){ var on=e.days.indexOf(i)>=0; return '<button type="button" class="'+(on?'on':'')+'" data-day="'+i+'" aria-pressed="'+on+'" title="'+d[1]+'">'+d[0]+'</button>'; }).join('')+'</span></td>'+
-        '<td class="schtime"><input type="time" data-sf="start" value="'+esc(e.start||'')+'" aria-label="Hora de inicio de '+esc(c.code)+'"> – <input type="time" data-sf="end" value="'+esc(e.end||'')+'" aria-label="Hora de fin de '+esc(c.code)+'">'+(cl?'<div class="schclash">Choca con '+esc(cl.join(', '))+'</div>':'')+'</td></tr>';
-    }).join('')+'</tbody></table></div>'+
-    '<p class="small muted" style="margin-top:10px">Toca los días para marcarlos y escribe la hora de inicio y fin. Se guarda solo.</p>';
+  html+='<div class="schwrap"><table class="schtbl"><thead><tr><th style="width:110px"></th><th>Sección</th><th>Días</th><th>Hora</th><th></th></tr></thead><tbody>';
+  t.courses.forEach(function(c){
+    var opts=schOpts(key,c.uid);
+    html+='<tr class="schhead"><td colspan="5"><strong>'+esc(c.code)+'</strong> &nbsp;'+esc(c.name||'')+' <span class="muted">· '+fmtCr(c.credits)+' cr</span>'+(c.grade==='IP'?' <span class="tag">IP</span>':'')+'</td></tr>';
+    opts.forEach(function(o,oi){
+      var cl=clash[c.uid+'|'+oi];
+      html+='<tr data-suid="'+esc(c.uid)+'" data-oi="'+oi+'"'+(cl?' class="clash"':'')+'><td class="schnum">Opción '+(oi+1)+'</td>'+
+        '<td><input class="schsec" data-sf="sec" value="'+esc(o.sec||'')+'" placeholder="—" aria-label="Sección de '+esc(c.code)+', opción '+(oi+1)+'"></td>'+
+        '<td><span class="days" role="group" aria-label="Días">'+SCH_DAYS.map(function(d,i){ var on=o.days.indexOf(i)>=0; return '<button type="button" class="'+(on?'on':'')+'" data-day="'+i+'" aria-pressed="'+on+'" title="'+d[1]+'">'+d[0]+'</button>'; }).join('')+'</span></td>'+
+        '<td class="schtime">'+schSelect('start',o.start,SCH_STARTS,'Hora de inicio')+' – '+schSelect('end',o.end,SCH_ENDS,'Hora de fin')+(cl?'<div class="schclash">Choca con '+esc(cl.join(', '))+'</div>':'')+'</td>'+
+        '<td class="num">'+(opts.length>1?'<button class="btn link small danger" data-action="sch-del">Quitar</button>':'')+'</td></tr>';
+    });
+    html+='<tr class="schadd"><td colspan="5"><button class="btn link small" data-action="sch-add" data-suid="'+esc(c.uid)+'">+ Añadir otra opción</button></td></tr>';
+  });
+  html+='</tbody></table></div><p class="small muted" style="margin-top:10px">Toca los días para marcarlos y escoge la hora. Añade varias opciones para presentarle al estudiante los horarios disponibles. Se guarda solo.</p>';
   el.innerHTML=html;
 }
 function exportSchedulePDF(){
   var t=S.plan&&S.plan.terms[session.schIdx]; if(!t) return;
   var doc=pdfDoc(); if(!doc) return;
-  var key=schTermKey(t), map=(S.schedule||{})[key]||{};
+  var key=schTermKey(t), rows=[], meta=[];
+  t.courses.forEach(function(c){
+    var opts=schOpts(key,c.uid);
+    opts.forEach(function(o,oi){
+      rows.push([oi?'':c.code, oi?'':pdfSafe(c.name||''), oi?'':fmtCr(c.credits), opts.length>1?String(oi+1):'', o.sec||'', '', o.start&&o.end?fmt12(o.start)+' - '+fmt12(o.end):'Sin horario']);
+      meta.push({o:o, first:oi===0});
+    });
+  });
   var y=studentBlock(doc,LH_TOP+10);
   doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(28,42,57); doc.text('Horario · '+tS(t.label), 54, y);
   doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(100,110,120); doc.text(fmtCr(Core.termCredits(t))+' créditos', 612-54, y, {align:'right'});
-  doc.autoTable(Object.assign({}, TABLE_STYLE, {startY:y+8, head:[['Curso','Descripción','Cr','Sección','Días','Hora']],
-    body:t.courses.map(function(c){ var e=map[c.uid]||{days:[]}; return [c.code, pdfSafe(c.name||''), fmtCr(c.credits), e.sec||'', '', e.start&&e.end?fmt12(e.start)+' - '+fmt12(e.end):'Sin horario']; }),
-    columnStyles:{0:{cellWidth:66,fontStyle:'bold'},2:{cellWidth:26,halign:'right'},3:{cellWidth:48},4:{cellWidth:112},5:{cellWidth:118}},
+  doc.autoTable(Object.assign({}, TABLE_STYLE, {startY:y+8, head:[['Curso','Descripción','Cr','Opción','Sección','Días','Hora']], body:rows,
+    columnStyles:{0:{cellWidth:62,fontStyle:'bold'},2:{cellWidth:24,halign:'right'},3:{cellWidth:40,halign:'center'},4:{cellWidth:44},5:{cellWidth:106},6:{cellWidth:104}},
+    didParseCell:function(d){ if(d.section==='body' && !meta[d.row.index].first){ d.cell.styles.lineWidth={bottom:0}; } if(d.section==='body' && meta[d.row.index+1] && !meta[d.row.index+1].first){ d.cell.styles.lineWidth={bottom:0}; } },
     didDrawCell:function(d){
-      if(d.section!=='body' || d.column.index!==4) return;
-      var c=t.courses[d.row.index], e=c&&map[c.uid]; var days=(e&&e.days)||[];
-      var bw=14, x=d.cell.x+4, yy=d.cell.y+(d.cell.height-bw)/2;
+      if(d.section!=='body' || d.column.index!==5) return;
+      var days=meta[d.row.index].o.days||[], bw=14, x=d.cell.x+4, yy=d.cell.y+(d.cell.height-bw)/2;
       SCH_DAYS.forEach(function(dd,i){ var on=days.indexOf(i)>=0;
         doc.setDrawColor(150,158,168); doc.setLineWidth(0.5);
         if(on){ doc.setFillColor(13,79,139); doc.rect(x+i*bw,yy,bw,bw,'FD'); doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); }
@@ -4811,7 +4837,7 @@ document.addEventListener('keydown',function(e){ if(e.key==='Escape' && drag) dr
 function closeMenus(except){ document.querySelectorAll('.menu.open').forEach(function(m){ if(m!==except){ m.classList.remove('open'); var b=m.querySelector('[aria-expanded]'); if(b) b.setAttribute('aria-expanded','false'); } }); }
 document.addEventListener('click',function(e){
   var dayB=session.tab==='sched' && e.target.closest('.schtbl [data-day]');
-  if(dayB){ var trD=dayB.closest('[data-suid]'), tD=S.plan.terms[session.schIdx], en=schEntry(schTermKey(tD), trD.getAttribute('data-suid')), dv=+dayB.getAttribute('data-day'), k=en.days.indexOf(dv);
+  if(dayB){ var trD=dayB.closest('[data-suid]'), tD=S.plan.terms[session.schIdx], en=schOpts(schTermKey(tD), trD.getAttribute('data-suid'), true)[+trD.getAttribute('data-oi')], dv=+dayB.getAttribute('data-day'), k=en.days.indexOf(dv);
     if(k>=0) en.days.splice(k,1); else { en.days.push(dv); en.days.sort(); } save(); renderSchedule(); return; }
   var pqEl=e.target.closest('[data-pq]');
   if(pqEl){ e.preventDefault(); e.stopPropagation(); if(document.getElementById('pqPop') && document.getElementById('pqPop').getAttribute('data-for')===pqEl.getAttribute('data-pq')+pqEl.closest('[data-uid]')?.getAttribute('data-uid')){ closePqPop(); return; } showPqPop(pqEl); var pp=document.getElementById('pqPop'); if(pp) pp.setAttribute('data-for', pqEl.getAttribute('data-pq')+pqEl.closest('[data-uid]')?.getAttribute('data-uid')); return; }
@@ -4877,6 +4903,8 @@ document.addEventListener('click',function(e){
   else if(a==='cost-toggle'){ S.costs=S.costs||{}; S.costs.on=!S.costs.on; save(); renderPlan(); }
   else if(a==='review-open') openAlertsList();
   else if(a==='sch-pdf') askPDF(exportSchedulePDF);
+  else if(a==='sch-add'){ var oa=schOpts(schTermKey(S.plan.terms[session.schIdx]), btn.getAttribute('data-suid'), true); oa.push({days:[],start:'',end:'',sec:''}); save(); renderSchedule(); }
+  else if(a==='sch-del'){ var trX=btn.closest('[data-suid]'), ox=schOpts(schTermKey(S.plan.terms[session.schIdx]), trX.getAttribute('data-suid'), true); if(ox.length>1){ ox.splice(+trX.getAttribute('data-oi'),1); save(); renderSchedule(); } }
   else if(a==='fix-plan') fixPlan();
   else if(a==='alerts-list') openAlertsList();
   else if(a==='del-term') openDeleteTerm(+btn.closest('.term').getAttribute('data-term'));
@@ -4888,11 +4916,11 @@ document.addEventListener('click',function(e){
 });
 document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeMenus(); if(e.key==='Enter' && e.target && e.target.id==='gpaEdit') e.target.blur(); });
 document.addEventListener('toggle',function(e){ if(e.target.id==='rulesBox') session.rulesOpen=e.target.open; if(e.target.id==='alertsBox') session.alertsOpen=e.target.open; if(e.target.id==='loadBox') session.loadOpen=e.target.open; if(e.target.id==='missBox') session.missOpen=e.target.open; if(e.target.id==='reviewBox') session.reviewOpen=e.target.open; },true);
-document.addEventListener('input',function(e){ if(!e.target) return; if(e.target.classList && e.target.classList.contains('schsec')){ var trI=e.target.closest('[data-suid]'); schEntry(schTermKey(S.plan.terms[session.schIdx]), trI.getAttribute('data-suid')).sec=e.target.value; save(); return; } if(e.target.id==='planNotes'){ S.notes=e.target.value; save(); } else if(e.target.id==='stName'){ S.student.name=e.target.value.trim(); save(); } else if(e.target.id==='stId'){ S.student.id=e.target.value.trim(); save(); } });
+document.addEventListener('input',function(e){ if(!e.target) return; if(e.target.classList && e.target.classList.contains('schsec')){ var trI=e.target.closest('[data-suid]'); schOpts(schTermKey(S.plan.terms[session.schIdx]), trI.getAttribute('data-suid'), true)[+trI.getAttribute('data-oi')].sec=e.target.value; save(); return; } if(e.target.id==='planNotes'){ S.notes=e.target.value; save(); } else if(e.target.id==='stName'){ S.student.name=e.target.value.trim(); save(); } else if(e.target.id==='stId'){ S.student.id=e.target.value.trim(); save(); } });
 document.addEventListener('change',function(e){
   if(e.target && e.target.id==='schTerm'){ session.schIdx=+e.target.value; renderSchedule(); return; }
   var sfc=e.target && e.target.closest && e.target.closest('.schtbl [data-suid]');
-  if(sfc && e.target.getAttribute('data-sf')){ var tC=S.plan.terms[session.schIdx], enC=schEntry(schTermKey(tC), sfc.getAttribute('data-suid')); enC[e.target.getAttribute('data-sf')]=e.target.value.trim(); save(); if(e.target.getAttribute('data-sf')!=='sec') renderSchedule(); return; }
+  if(sfc && e.target.getAttribute('data-sf')){ var tC=S.plan.terms[session.schIdx], enC=schOpts(schTermKey(tC), sfc.getAttribute('data-suid'), true)[+sfc.getAttribute('data-oi')]; enC[e.target.getAttribute('data-sf')]=e.target.value.trim(); save(); if(e.target.getAttribute('data-sf')!=='sec') renderSchedule(); return; }
   var t=e.target;
   if(t.id==='stName'){ S.student.name=t.value.trim(); save(); return; }
   if(t.id==='stId'){ S.student.id=t.value.trim(); save(); return; }
