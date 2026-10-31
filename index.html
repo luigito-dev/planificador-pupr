@@ -2720,7 +2720,7 @@ function wizardHTML(){
     '</ol><p class="small muted" style="margin:10px 0 0">¿Dudas? Toca <strong>Ayuda</strong> arriba a la derecha.</p></div>';
 }
 /* ---------------- Ayuda ---------------- */
-var APP_VERSION='31 oct 2026 · 2:55 pm';
+var APP_VERSION='31 oct 2026 · 2:40 pm (horario 8 AM)';
 function openHelp(){
   var sec=function(t,items){ return '<h4 style="margin:16px 0 6px">'+t+'</h4><ul style="margin:0;padding-left:20px">'+items.map(function(i){return '<li style="margin:4px 0">'+i+'</li>';}).join('')+'</ul>'; };
   var body='<p style="margin-top:0">El planificador arma el plan de estudios de cada estudiante, trimestre por trimestre, siguiendo los prerrequisitos y las reglas de PUPR.</p>'+
@@ -2967,10 +2967,10 @@ function schOpts(key, uid, create){
 function hm(s){ var m=/^(\d{1,2}):(\d{2})/.exec(s||''); return m? (+m[1])*60+(+m[2]) : null; }
 function fmt12(s){ var v=hm(s); if(v==null) return ''; var h=Math.floor(v/60), mi=v%60, ap=h>=12?'PM':'AM'; h=h%12||12; return ('0'+h).slice(-2)+':'+('0'+mi).slice(-2)+' '+ap; }
 function hhmm(v){ return ('0'+Math.floor(v/60)).slice(-2)+':'+('0'+(v%60)).slice(-2); }
-// Bloques de 30 minutos: inicio a la hora o y media; fin a :29 o :59.
+// Bloques de 30 minutos desde las 8:00 AM: inicio a la hora o y media; fin a :29 o :59.
 var SCH_STARTS=[], SCH_ENDS=[];
-for(var _m=7*60;_m<=21*60+30;_m+=30) SCH_STARTS.push(hhmm(_m));
-for(var _n=7*60+59;_n<=22*60+59;_n+=30) SCH_ENDS.push(hhmm(_n));
+for(var _m=8*60;_m<=21*60+30;_m+=30) SCH_STARTS.push(hhmm(_m));
+for(var _n=8*60+29;_n<=22*60+59;_n+=30) SCH_ENDS.push(hhmm(_n));
 function schSelect(field, val, list, label){
   var has=!val || list.indexOf(val)>=0;
   return '<select data-sf="'+field+'" aria-label="'+label+'"><option value="">—</option>'+(has?'':'<option value="'+esc(val)+'" selected>'+fmt12(val)+'</option>')+list.map(function(v){ return '<option value="'+v+'"'+(v===val?' selected':'')+'>'+fmt12(v)+'</option>'; }).join('')+'</select>';
