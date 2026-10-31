@@ -220,6 +220,7 @@ pre.raw{white-space:pre-wrap;font-size:12px;background:var(--soft);padding:12px;
 .schtbl tr.schadd td{padding:4px 10px 8px}
 .schtbl .schnum{color:var(--muted);font-size:13px;padding-left:18px;white-space:nowrap}
 .schprof{width:150px}
+.schh{display:flex;justify-content:space-between;align-items:center;gap:10px}
 .addlist{max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:8px}
 .addrow{display:block;width:100%;text-align:left;padding:8px 10px;border:0;border-bottom:1px solid var(--line);background:var(--paper);font:inherit;font-size:13.5px;color:var(--ink);cursor:pointer}
 .addrow:hover{background:var(--accent-soft)}
@@ -2726,7 +2727,7 @@ function wizardHTML(){
     '</ol><p class="small muted" style="margin:10px 0 0">¿Dudas? Toca <strong>Ayuda</strong> arriba a la derecha.</p></div>';
 }
 /* ---------------- Ayuda ---------------- */
-var APP_VERSION='31 oct 2026 · 4:10 pm';
+var APP_VERSION='31 oct 2026 · 4:20 pm';
 function openHelp(){
   var sec=function(t,items){ return '<h4 style="margin:16px 0 6px">'+t+'</h4><ul style="margin:0;padding-left:20px">'+items.map(function(i){return '<li style="margin:4px 0">'+i+'</li>';}).join('')+'</ul>'; };
   var body='<p style="margin-top:0">El planificador arma el plan de estudios de cada estudiante, trimestre por trimestre, siguiendo los prerrequisitos y las reglas de PUPR.</p>'+
@@ -2983,13 +2984,16 @@ function schSelect(field, val, list, label){
 }
 function schComplete(o){ return o && o.days.length && hm(o.start)!=null && hm(o.end)!=null; }
 function schOverlap(A,B){ return A.days.some(function(d){ return B.days.indexOf(d)>=0; }) && hm(A.start)<hm(B.end) && hm(B.start)<hm(A.end); }
+/** Clases quitadas solo del horario (siguen en el plan). */
+function schHidden(key){ S.schedule=S.schedule||{}; var m=S.schedule[key]=S.schedule[key]||{}; return m.__hidden=m.__hidden||[]; }
+function schCourses(t,key){ var h=((S.schedule||{})[key]||{}).__hidden||[]; return t.courses.filter(function(c){ return h.indexOf(c.uid)<0; }); }
 /** Choques: una opción choca si coincide con una clase que tiene un solo horario. */
 function schClashes(t, key){
-  var out={};
-  t.courses.forEach(function(c){
+  var out={}, CS=schCourses(t,key);
+  CS.forEach(function(c){
     schOpts(key,c.uid).forEach(function(o,oi){
       if(!schComplete(o)) return;
-      t.courses.forEach(function(d){
+      CS.forEach(function(d){
         if(d.uid===c.uid) return; var od=schOpts(key,d.uid);
         if(od.length===1 && schComplete(od[0]) && schOverlap(o,od[0])) (out[c.uid+'|'+oi]=out[c.uid+'|'+oi]||[]).push(d.code);
       });
@@ -3001,17 +3005,17 @@ function renderSchedule(){
   var el=$('panel'), L=schTerms();
   if(!L.length){ el.innerHTML='<p class="muted">Primero haz el plan académico. El horario se arma con las clases de cada trimestre.</p>'; return; }
   if(session.schIdx==null || !S.plan.terms[session.schIdx] || !S.plan.terms[session.schIdx].courses.length) session.schIdx=schDefaultIdx();
-  var t=S.plan.terms[session.schIdx], key=schTermKey(t), clash=schClashes(t,key);
-  var noSch=t.courses.filter(function(c){ return !schOpts(key,c.uid).some(schComplete); }).length, nClash=Object.keys(clash).length;
+  var t=S.plan.terms[session.schIdx], key=schTermKey(t), clash=schClashes(t,key), CS=schCourses(t,key), nHid=t.courses.length-CS.length;
+  var noSch=CS.filter(function(c){ return !schOpts(key,c.uid).some(schComplete); }).length, nClash=Object.keys(clash).length;
   var html='<div class="schbar"><label class="schlbl">Horario de <select id="schTerm">'+L.map(function(x){ return '<option value="'+x.i+'"'+(x.i===session.schIdx?' selected':'')+'>'+esc(tS(x.t.label))+'</option>'; }).join('')+'</select></label>'+
-    '<span class="spill act">'+fmtCr(Core.termCredits(t))+' créditos</span>'+
+    '<span class="spill act">'+fmtCr(CS.reduce(function(s,c){ return s+Core.num(c.credits); },0))+' créditos</span>'+
     (noSch?'<span class="spill warn">'+noSch+' clase'+(noSch>1?'s':'')+' sin horario</span>':'<span class="spill on">Todas tienen horario</span>')+
     (nClash?'<span class="spill warn bad">'+nClash+' opci'+(nClash>1?'ones chocan':'ón choca')+'</span>':'')+
     '<span class="spacer"></span><button class="btn sm" data-action="sch-addc">+ Añadir clase</button><button class="btn sm" data-action="sch-img">Subir imagen de horarios</button><button class="btn sm" data-action="sch-pdf">Descargar PDF</button></div>';
   html+='<div class="schwrap"><table class="schtbl"><thead><tr><th style="width:96px"></th><th>Sección</th><th>Profesor</th><th>Días</th><th>Hora</th><th></th></tr></thead><tbody>';
-  t.courses.forEach(function(c){
+  CS.forEach(function(c){
     var opts=schOpts(key,c.uid);
-    html+='<tr class="schhead"><td colspan="6"><strong>'+esc(c.code)+'</strong> &nbsp;'+esc(c.name||'')+' <span class="muted">· '+fmtCr(c.credits)+' cr</span>'+(c.grade==='IP'?' <span class="tag">IP</span>':'')+'</td></tr>';
+    html+='<tr class="schhead"><td colspan="6"><span class="schh"><span><strong>'+esc(c.code)+'</strong> &nbsp;'+esc(c.name||'')+' <span class="muted">· '+fmtCr(c.credits)+' cr</span>'+(c.grade==='IP'?' <span class="tag">IP</span>':'')+'</span><button class="btn link small danger" data-action="sch-rmc" data-suid="'+esc(c.uid)+'">Quitar clase</button></span></td></tr>';
     opts.forEach(function(o,oi){
       var cl=clash[c.uid+'|'+oi];
       html+='<tr data-suid="'+esc(c.uid)+'" data-oi="'+oi+'"'+(cl?' class="clash"':'')+'><td class="schnum">Opción '+(oi+1)+'</td>'+
@@ -3023,14 +3027,15 @@ function renderSchedule(){
     });
     html+='<tr class="schadd"><td colspan="6"><button class="btn link small" data-action="sch-add" data-suid="'+esc(c.uid)+'">+ Añadir otra opción</button></td></tr>';
   });
-  html+='</tbody></table></div><p class="small muted" style="margin-top:10px">Toca los días para marcarlos y escoge la hora. Añade varias opciones para presentarle al estudiante los horarios disponibles. Se guarda solo.</p>';
+  if(!CS.length) html+='<tr><td colspan="6" class="muted">No hay clases en este horario. Usa "+ Añadir clase".</td></tr>';
+  html+='</tbody></table></div>'+(nHid?'<p class="small" style="margin:8px 0 0">'+nHid+' clase'+(nHid>1?'s':'')+' quitada'+(nHid>1?'s':'')+' del horario (siguen en el plan). <button class="btn link small" data-action="sch-unhide">Volver a mostrarla'+(nHid>1?'s':'')+'</button></p>':'')+'<p class="small muted" style="margin-top:10px">Toca los días para marcarlos y escoge la hora. Añade varias opciones para presentarle al estudiante los horarios disponibles. Se guarda solo.</p>';
   el.innerHTML=html;
 }
 function exportSchedulePDF(){
   var t=S.plan&&S.plan.terms[session.schIdx]; if(!t) return;
   var doc=pdfDoc(); if(!doc) return;
   var key=schTermKey(t), rows=[], meta=[];
-  t.courses.forEach(function(c){
+  schCourses(t,key).forEach(function(c){
     var opts=schOpts(key,c.uid);
     opts.forEach(function(o,oi){
       rows.push([oi?'':c.code, oi?'':pdfSafe(c.name||''), oi?'':fmtCr(c.credits), opts.length>1?String(oi+1):'', o.sec||'', pdfSafe(o.prof||''), '', o.start&&o.end?fmt12(o.start)+' - '+fmt12(o.end):'Sin horario']);
@@ -3093,6 +3098,18 @@ function openAddScheduleCourse(){
   m.body.querySelector('[data-nadd]').addEventListener('click',function(e){ e.preventDefault();
     var code=m.body.querySelector('[data-nc]').value.trim(); if(!Core.isCourseCode(code)){ toast('Escribe un código válido, por ejemplo HIST 3111.'); return; }
     code=Core.normCode(code); addCourseToTerm(ti,{code:code, name:m.body.querySelector('[data-nn]').value.trim(), credits:m.body.querySelector('[data-ncr]').value}); done(code); });
+}
+
+function openRemoveScheduleCourse(uid){
+  var T=S.plan.terms[session.schIdx], key=schTermKey(T), c=T.courses.filter(function(x){ return x.uid===uid; })[0]; if(!c) return;
+  modal({title:'Quitar '+c.code, narrow:true, body:'<div class="checklist"><label><input type="radio" name="rmc" value="sch" checked><span><strong>Solo del horario</strong><br><span class="small muted">La clase sigue en el plan, en '+esc(tS(T.label))+'. Puedes volver a mostrarla.</span></span></label>'+
+    '<label><input type="radio" name="rmc" value="plan"><span><strong>Del horario y del plan</strong><br><span class="small muted">Sale de '+esc(tS(T.label))+'. Si la necesita, quedará en "cursos que faltan".</span></span></label></div>',
+    buttons:[{label:'Cancelar'},{label:'Quitar',primary:true,danger:true,onClick:function(b){
+      var v=b.querySelector('input[name=rmc]:checked').value;
+      if(v==='sch'){ var h=schHidden(key); if(h.indexOf(uid)<0) h.push(uid); toast(c.code+' quitada del horario.'); }
+      else { T.courses=T.courses.filter(function(x){ return x.uid!==uid; }); if(S.schedule&&S.schedule[key]) delete S.schedule[key][uid]; S.planEdited=true; toast(c.code+' quitada del horario y del plan.'); }
+      save(); renderSchedule();
+    }}]});
 }
 /* ---------------- Leer horarios desde una imagen (captura de la oferta de secciones) ---------------- */
 var TESS_V='5.1.1';
@@ -5107,6 +5124,8 @@ document.addEventListener('click',function(e){
   else if(a==='sch-pdf') askPDF(exportSchedulePDF);
   else if(a==='sch-img') openScheduleImage();
   else if(a==='sch-addc') openAddScheduleCourse();
+  else if(a==='sch-unhide'){ var kU=schTermKey(S.plan.terms[session.schIdx]); schHidden(kU).length=0; save(); renderSchedule(); }
+  else if(a==='sch-rmc') openRemoveScheduleCourse(btn.getAttribute('data-suid'));
   else if(a==='sch-add'){ var oa=schOpts(schTermKey(S.plan.terms[session.schIdx]), btn.getAttribute('data-suid'), true); oa.push({days:[],start:'',end:'',sec:''}); save(); renderSchedule(); }
   else if(a==='sch-del'){ var trX=btn.closest('[data-suid]'), ox=schOpts(schTermKey(S.plan.terms[session.schIdx]), trX.getAttribute('data-suid'), true); if(ox.length>1){ ox.splice(+trX.getAttribute('data-oi'),1); save(); renderSchedule(); } }
   else if(a==='fix-plan') fixPlan();
