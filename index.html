@@ -185,7 +185,17 @@ pre.raw{white-space:pre-wrap;font-size:12px;background:var(--soft);padding:12px;
 .spill.warn b{background:#f8951d;color:#fff;border-radius:999px;padding:1px 6px;font-size:11px}
 .spill.warn.bad b{background:var(--danger)}
 .loadrow{display:flex;gap:10px;align-items:center;margin:0 0 14px}
-.loadrow>.loadbox{flex:1;margin:0}
+.loadrow>.loadbox{flex:0 1 auto;margin:0}
+.loadrow{flex-wrap:wrap;background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:6px 10px}
+.loadrow>.loadbox{border:0;background:none}
+.loadrow>.loadbox[open]{flex-basis:100%;order:10}
+.loadrow .lrsp{flex:1}
+.loadrow{gap:8px}
+.loadrow>.loadbox>summary{padding:6px 4px}
+.lrterms{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
+.lrterms select{font:inherit;font-size:13px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:var(--paper);color:var(--ink);width:auto!important;max-width:190px}
+.menu-list .danger-item{color:var(--danger)}
+.menu-list button[disabled]{opacity:.45;cursor:default}
 .ypills{display:inline-flex;gap:6px;align-items:center;margin-left:6px}
 @media (max-width:680px){ .loadrow{flex-wrap:wrap} .loadrow>.loadbox{flex-basis:100%} .yh{flex-wrap:wrap} .ypills{order:5;flex-basis:100%;margin:4px 0 0} }
 @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) .spill.on{background:#16321f;border-color:#2f6b40;color:#7fc3a0} :root:not([data-theme="light"]) .spill.warn{background:#33250f;border-color:#6b4a14;color:#f2b45f} }
@@ -2622,7 +2632,7 @@ function renderStudent(){
   var pct=function(x){ return total? (x/total*100) : 0; };
   var trInfo = S.records.length
     ? '<span>Historial: '+S.records.length+' cursos <button class="btn sm" data-action="open-transcript">Cambiar transcript</button></span>'
-    : (S.plan ? '<span>Sin historial <button class="btn sm primary" data-action="open-transcript">Subir transcript</button>'+(cur?' o <button class="btn link" data-action="open-audit">marcar cursos a mano</button>':'')+'</span>' : '');
+    : (S.plan ? '<span>Sin historial <button class="btn sm primary" data-action="open-transcript">Subir transcript</button>'+(false?'':'')+'</span>' : '');
   $('student').innerHTML =
     '<div class="stu-top"><div class="stu-who">'+
     '<label class="hidden" for="stName">Nombre del estudiante</label>'+
@@ -2727,7 +2737,7 @@ function wizardHTML(){
     '</ol><p class="small muted" style="margin:10px 0 0">¿Dudas? Toca <strong>Ayuda</strong> arriba a la derecha.</p></div>';
 }
 /* ---------------- Ayuda ---------------- */
-var APP_VERSION='31 oct 2026 · 4:40 pm';
+var APP_VERSION='1 nov 2026 · 9:10 am';
 function openHelp(){
   var sec=function(t,items){ return '<h4 style="margin:16px 0 6px">'+t+'</h4><ul style="margin:0;padding-left:20px">'+items.map(function(i){return '<li style="margin:4px 0">'+i+'</li>';}).join('')+'</ul>'; };
   var body='<p style="margin-top:0">El planificador arma el plan de estudios de cada estudiante, trimestre por trimestre, siguiendo los prerrequisitos y las reglas de PUPR.</p>'+
@@ -2783,9 +2793,13 @@ function renderPlan(){
         '<button role="menuitem" data-action="pdf-transcript">Transcript</button>'+
       '</div></div>'+
       '<button class="btn" data-action="email-plan">Enviar por correo</button>'+
-      ((S.planEdited || S.planBeforeFill || (S.prevLoad && LOAD_KEYS.some(function(k){ return S.prevLoad[k]!==S.plannerRules[k]; })) || canUndoProgram())?'<button class="btn" data-action="restore">Restaurar</button>':'')+
       '<span class="spacer"></span>'+
-      '<button class="btn ghost danger" data-action="delete-plan" title="Rehacer el plan desde cero, borrar el plan o todo lo del estudiante">Borrar</button>'+
+      (function(){ var canUndo=!!(S.planEdited&&S.planOriginal || S.planBeforeFill || (S.prevLoad && LOAD_KEYS.some(function(k){ return S.prevLoad[k]!==S.plannerRules[k]; })) || canUndoProgram());
+        return '<div class="menu"><button class="btn ghost danger" data-action="menu" aria-haspopup="true" aria-expanded="false">Deshacer o borrar ▾</button><div class="menu-list" role="menu">'+
+        '<button role="menuitem" data-action="restore"'+(canUndo?'':' disabled title="No hay cambios que deshacer"')+'>Volver al plan anterior</button>'+
+        '<button role="menuitem" data-action="regen-fresh">Rehacer el plan desde cero</button>'+
+        '<button role="menuitem" data-action="del-plan-only">Borrar solo el plan</button><hr>'+
+        '<button role="menuitem" data-action="del-student" class="danger-item">Borrar todo el estudiante</button></div></div>'; })()+
       '<div class="menu"><button class="btn ghost" data-action="menu" aria-haspopup="true" aria-expanded="false">Más ▾</button><div class="menu-list" role="menu">'+
 
         (planWindow(edit).limited?'<button role="menuitem" data-action="add-term">Agregar trimestre</button>':'')+
@@ -2800,12 +2814,15 @@ function renderPlan(){
       '</div>';
   }
     var loadSum=pr.maxCredits+' créditos'+(Core.num(pr.maxCourses)?' · máx. '+pr.maxCourses+' clases':'')+(pr.includeSummer?' · Summer: '+(Core.num(pr.summerMax)||pr.maxCredits)+' créditos':' · sin Summer')+'';
-    html+='<div class="loadrow"><details class="loadbox" id="loadBox"'+(session.loadOpen?' open':'')+'><summary><span class="muted">Carga por trimestre:</span> <strong>'+esc(loadSum)+'</strong> <span class="chg">Cambiar</span></summary>'+loadIn+'</details>'+rvHTML+'</div>';
+    html+='<div class="loadrow"><details class="loadbox" id="loadBox"'+(session.loadOpen?' open':'')+'><summary><span class="muted">Carga por trimestre:</span> <strong>'+esc(loadSum)+'</strong> <span class="chg">Cambiar</span></summary>'+loadIn+'</details>'+
+      '<span class="lrsp"></span><label class="lrterms">Trimestres a planificar <select id="loadTerms">'+[0,1,2,3,4,5,6,8,9,12].map(function(v){return '<option value="'+v+'"'+(v===(Core.num(S.planTerms)||0)?' selected':'')+'>'+(v?v:'Todos')+'</option>';}).join('')+'</select></label>'+
+      '<button class="spill act" data-action="fastest" title="Compara cuánto se acorta el plan con más créditos o con Summer">Terminar antes</button>'+
+      '<button class="spill'+(costCfg().on?' on':'')+'" data-action="cost-toggle" aria-pressed="'+(costCfg().on?'true':'false')+'" title="'+(costCfg().on?'Ocultar':'Mostrar')+' el costo aproximado">COSTOS</button>'+rvHTML+'</div>';
   if(edit && rvHTML) html+='<div class="loadrow">'+rvHTML+'</div>';
   if(S.historyChanged) html+='<div class="notice info">El plan tiene cambios manuales y el historial o las reglas cambiaron. Los cursos aprobados y las electivas ya se actualizaron. <button class="btn link" data-action="acomodar">Acomodar automáticamente</button></div>';
   var sgMap=slotGroupMap(cur), stP=Core.buildStatus(cur,S.records,S.plannerRules);
   var nPins=collectPins().n;
-  html+='<div class="pq-legend small muted"><span><i class="ldot" style="background:var(--ok)"></i>completado</span><span><i class="ldot" style="background:var(--ip)"></i>en progreso</span><span><i class="ldot" style="background:var(--pend)"></i>pendiente</span>'+(nPins||edit?'<span><span class="pin-dot" style="margin:0 4px 0 0">•</span>curso fijo'+(edit?' (toca ○ para fijar)':'')+'</span>':'')+(edit?'':'<span class="draghint termsel">'+'<label>Trimestres a planificar <select id="loadTerms">'+[0,1,2,3,4,5,6,8,9,12].map(function(v){return '<option value="'+v+'"'+(v===(Core.num(S.planTerms)||0)?' selected':'')+'>'+(v?v:'Todos (hasta graduarse)')+'</option>';}).join('')+'</select></label>'+'</span>')+'</div>';
+  html+='<div class="pq-legend small muted"><span><i class="ldot" style="background:var(--ok)"></i>completado</span><span><i class="ldot" style="background:var(--ip)"></i>en progreso</span><span><i class="ldot" style="background:var(--pend)"></i>pendiente</span>'+(nPins||edit?'<span><span class="pin-dot" style="margin:0 4px 0 0">•</span>curso fijo'+(edit?' (toca ○ para fijar)':'')+'</span>':'')+'</div>';
   var win=planWindow(edit);
   // Bloques por año académico: FA y WI del año Y, SP y SU del año Y+1.
   var years=[], yIdx={};
@@ -2819,7 +2836,7 @@ function renderPlan(){
   html+='<div class="years'+(edit?' editing':'')+'">';
   years.forEach(function(y, yi){
     var ycr=y.terms.reduce(function(s,ti){ return s+Core.termCredits(S.plan.terms[ti]); },0);
-    html+='<section class="yearblock"><div class="yh"><h3>Año '+(yi+1)+'</h3><span class="muted">'+y.ay+'–'+(y.ay+1)+'</span>'+(yi===0?'<span class="ypills"><button class="spill act" data-action="fastest" title="Compara cuánto se acorta el plan con más créditos o con Summer">Terminar antes</button><button class="spill'+(cOn?' on':'')+'" data-action="cost-toggle" aria-pressed="'+(cOn?'true':'false')+'" title="'+(cOn?'Ocultar':'Mostrar')+' el costo aproximado">COSTOS</button>'+'</span>':'')+'<span class="ycr">'+fmtCr(ycr)+' créditos</span></div><div class="ygrid'+(pr.includeSummer||y.terms.length>3?' four':'')+'">';
+    html+='<section class="yearblock"><div class="yh"><h3>Año '+(yi+1)+'</h3><span class="muted">'+y.ay+'–'+(y.ay+1)+'</span>'+'<span class="ycr">'+fmtCr(ycr)+' créditos</span></div><div class="ygrid'+(pr.includeSummer||y.terms.length>3?' four':'')+'">';
     y.terms.forEach(function(ti){
       var t=S.plan.terms[ti];
       var cr=Core.termCredits(t), cap=Core.termCap(t,pr), flag='';
@@ -3023,7 +3040,7 @@ function renderSchedule(){
     '<span class="spill act">'+fmtCr(CS.reduce(function(s,c){ return s+Core.num(c.credits); },0))+' créditos</span>'+
     (noSch?'<span class="spill warn">'+noSch+' clase'+(noSch>1?'s':'')+' sin horario</span>':'<span class="spill on">Todas tienen horario</span>')+
     (nClash?'<span class="spill warn bad">'+nClash+' opci'+(nClash>1?'ones chocan':'ón choca')+'</span>':'')+
-    '<span class="spacer"></span><button class="btn sm" data-action="sch-addc">+ Añadir clase</button><button class="btn sm" data-action="sch-img">Subir imagen de horarios</button><button class="btn sm" data-action="sch-pdf">Descargar PDF</button></div>';
+    '<span class="spacer"></span><div class="menu"><button class="btn sm" data-action="menu" aria-haspopup="true" aria-expanded="false">+ Añadir clase ▾</button><div class="menu-list" role="menu"><button role="menuitem" data-action="sch-addc">Buscar en el currículo</button><button role="menuitem" data-action="sch-img">Leer de una imagen</button></div></div><button class="btn sm" data-action="sch-pdf">Descargar PDF</button></div>';
   html+='<div class="schwrap"><table class="schtbl"><thead><tr><th style="width:96px"></th><th>Sección</th><th>Profesor</th><th>Días</th><th>Hora</th><th></th></tr></thead><tbody>';
   CS.forEach(function(c){
     var opts=schOpts(key,c.uid);
@@ -4934,7 +4951,7 @@ function clearAll(){
 }
 
 /** Borrar desde la vista del plan: solo el plan (se puede deshacer) o todo lo del estudiante. */
-function openDeletePlan(){
+function openDeletePlan(pre){
   var nm=S.student.name||'este estudiante';
   var dm=modal({title:'Borrar o rehacer', narrow:true,
     body:'<div class="checklist"><label><input type="radio" name="dp" value="fresh"><span><strong>Rehacer el plan desde cero</strong><br><span class="small muted">El sistema hace un plan nuevo con todas las reglas, sin los cambios a mano ni los cursos fijos. Se quedan el historial, el GPA y las notas. Puedes deshacerlo con Restaurar.</span></span></label>'+
@@ -4953,6 +4970,7 @@ function openDeletePlan(){
       }
     }}]});
   var okB=dm.el.querySelector('footer .btn.primary');
+  if(pre){ var pr0=dm.body.querySelector('input[name=dp][value="'+pre+'"]'); if(pr0){ pr0.checked=true; } dm.body.querySelectorAll('input[name=dp]').forEach(function(r){ if(r.value!==pre) r.closest('label').style.display='none'; }); dm.el.querySelector('#mt').textContent=pre==='plan'?'Borrar solo el plan':'Borrar todo el estudiante'; }
   dm.body.addEventListener('change',function(){ var v=dm.body.querySelector('input[name=dp]:checked').value; okB.textContent=v==='fresh'?'Rehacer':'Borrar'; okB.classList.toggle('danger', v!=='fresh'); });
 }
 function undoDeletePlan(){
@@ -5107,6 +5125,8 @@ document.addEventListener('click',function(e){
   else if(a==='new-student'){ startNewStudent(); toast('Nuevo estudiante. El anterior quedó guardado en Estudiantes.'); }
   else if(a==='help') openHelp();
   else if(a==='delete-plan') openDeletePlan();
+  else if(a==='del-plan-only') openDeletePlan('plan');
+  else if(a==='del-student') openDeletePlan('student');
   else if(a==='undo-delete-plan') undoDeletePlan();
   else if(a==='email-plan') openEmailSummary();
   else if(a==='note-date'){ var ta=$('planNotes'); if(ta){ var d=new Date(), ds=('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+'/'+d.getFullYear(); var v=ta.value; ta.value=(v && !/\n$/.test(v)?v+'\n':v)+ds+': '; S.notes=ta.value; save(); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } }
