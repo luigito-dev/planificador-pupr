@@ -1692,8 +1692,23 @@ function load(){
 }
 var S = load() || defaultState();
 var session = { pdfData:null, editMode:false, downloads:null, tab:'plan', rulesOpen:false };
+/* Historial de cambios del plan para "Deshacer el último cambio" (mientras la página está abierta). */
+var undoStack=[], undoSnap=null, undoPlan=null, undoId=null, undoApplying=false;
+function planSnap(){ return JSON.stringify({plan:S.plan, ed:!!S.planEdited, load:LOAD_KEYS.map(function(k){ return S.plannerRules[k]; }), terms:S.planTerms||0}); }
+function trackUndo(){
+  if(undoId!==S.currentId){ undoStack=[]; undoSnap=null; undoPlan=null; undoId=S.currentId; }
+  var s=planSnap(), pl=JSON.stringify(S.plan);
+  if(undoApplying){ undoSnap=s; undoPlan=pl; return; }
+  if(undoSnap==null){ undoSnap=s; undoPlan=pl; return; }
+  if(s===undoSnap) return;
+  // Si solo cambió la carga (el plan todavía no), se espera a que el plan cambie para guardar el estado anterior completo.
+  if(pl===undoPlan) return;
+  undoStack.push(undoSnap); if(undoStack.length>30) undoStack.shift();
+  undoSnap=s; undoPlan=pl;
+}
 function save(){
   if(!S.roster) S.roster={}; if(!S.currentId) S.currentId=Core.uid();
+  try{ trackUndo(); }catch(e){}
   if(hasStudentData()) S.roster[S.currentId]=snapshotStudent();
   var js=JSON.stringify(S);
   try{
@@ -2314,6 +2329,19 @@ function openRestore(){
   }}]});
 }
 
+/** Deshace lo último que cambió el plan, sin preguntar. */
+function undoLast(){
+  if(undoId===S.currentId && undoStack.length){
+    var o=JSON.parse(undoStack.pop());
+    S.plan=o.plan; S.planEdited=o.ed; LOAD_KEYS.forEach(function(k,i){ S.plannerRules[k]=o.load[i]; }); S.planTerms=o.terms;
+    undoApplying=true; save(); undoApplying=false; renderAll(); toast('Se deshizo el último cambio.'+(undoStack.length?' Puedes seguir deshaciendo.':'')); return;
+  }
+  if(S.plan && S.planBeforeFill){ S.plan=S.planBeforeFill; S.planBeforeFill=null; S.planOriginal=null; S.planEdited=true; save(); renderAll(); toast('Se deshizo el último cambio.'); return; }
+  if(S.prevLoad && LOAD_KEYS.some(function(k){ return S.prevLoad[k]!==S.plannerRules[k]; })){ var prev=S.prevLoad; rememberLoad(); LOAD_KEYS.forEach(function(k){ S.plannerRules[k]=prev[k]; }); save(); session.editMode=false; regenerate(true); toast('Carga anterior restaurada.'); return; }
+  if(S.plan && S.planEdited && S.planOriginal){ S.plan=clone(S.planOriginal); S.planEdited=false; S.historyChanged=false; save(); renderAll(); toast('Se quitaron los cambios hechos a mano.'); return; }
+  if(canUndoProgram()){ undoProgram(); return; }
+  toast('No hay cambios que deshacer.');
+}
 /* ---------------- Terminar en el menor tiempo posible ---------------- */
 function openFastest(){
   var cur=curr(); if(!cur){ toast('Selecciona el programa primero.'); return; }
@@ -2737,7 +2765,7 @@ function wizardHTML(){
     '</ol><p class="small muted" style="margin:10px 0 0">¿Dudas? Toca <strong>Ayuda</strong> arriba a la derecha.</p></div>';
 }
 /* ---------------- Ayuda ---------------- */
-var APP_VERSION='1 nov 2026 · 9:10 am';
+var APP_VERSION='2 nov 2026 · 8:00 am';
 function openHelp(){
   var sec=function(t,items){ return '<h4 style="margin:16px 0 6px">'+t+'</h4><ul style="margin:0;padding-left:20px">'+items.map(function(i){return '<li style="margin:4px 0">'+i+'</li>';}).join('')+'</ul>'; };
   var body='<p style="margin-top:0">El planificador arma el plan de estudios de cada estudiante, trimestre por trimestre, siguiendo los prerrequisitos y las reglas de PUPR.</p>'+
@@ -2794,12 +2822,11 @@ function renderPlan(){
       '</div></div>'+
       '<button class="btn" data-action="email-plan">Enviar por correo</button>'+
       '<span class="spacer"></span>'+
-      (function(){ var canUndo=!!(S.planEdited&&S.planOriginal || S.planBeforeFill || (S.prevLoad && LOAD_KEYS.some(function(k){ return S.prevLoad[k]!==S.plannerRules[k]; })) || canUndoProgram());
+      (function(){ var canUndo=!!((undoId===S.currentId && undoStack.length) || S.planEdited&&S.planOriginal || S.planBeforeFill || (S.prevLoad && LOAD_KEYS.some(function(k){ return S.prevLoad[k]!==S.plannerRules[k]; })) || canUndoProgram());
         return '<div class="menu"><button class="btn ghost danger" data-action="menu" aria-haspopup="true" aria-expanded="false">Deshacer o borrar ▾</button><div class="menu-list" role="menu">'+
-        '<button role="menuitem" data-action="restore"'+(canUndo?'':' disabled title="No hay cambios que deshacer"')+'>Volver al plan anterior</button>'+
-        '<button role="menuitem" data-action="regen-fresh">Rehacer el plan desde cero</button>'+
-        '<button role="menuitem" data-action="del-plan-only">Borrar solo el plan</button><hr>'+
-        '<button role="menuitem" data-action="del-student" class="danger-item">Borrar todo el estudiante</button></div></div>'; })()+
+        '<button role="menuitem" data-action="undo-last"'+(canUndo?'':' disabled title="No hay cambios que deshacer"')+'>Deshacer el último cambio</button>'+
+        '<button role="menuitem" data-action="regen-fresh">Empezar el plan de nuevo</button><hr>'+
+        '<button role="menuitem" data-action="del-student" class="danger-item">Borrar estudiante</button></div></div>'; })()+
       '<div class="menu"><button class="btn ghost" data-action="menu" aria-haspopup="true" aria-expanded="false">Más ▾</button><div class="menu-list" role="menu">'+
 
         (planWindow(edit).limited?'<button role="menuitem" data-action="add-term">Agregar trimestre</button>':'')+
@@ -5125,7 +5152,7 @@ document.addEventListener('click',function(e){
   else if(a==='new-student'){ startNewStudent(); toast('Nuevo estudiante. El anterior quedó guardado en Estudiantes.'); }
   else if(a==='help') openHelp();
   else if(a==='delete-plan') openDeletePlan();
-  else if(a==='del-plan-only') openDeletePlan('plan');
+  else if(a==='undo-last') undoLast();
   else if(a==='del-student') openDeletePlan('student');
   else if(a==='undo-delete-plan') undoDeletePlan();
   else if(a==='email-plan') openEmailSummary();
@@ -5135,7 +5162,7 @@ document.addEventListener('click',function(e){
   else if(a==='regen') regenWithConfirm();
   else if(a==='blank-plan') startBlankPlan();
   else if(a==='complete-plan' || a==='acomodar') acomodar();
-  else if(a==='regen-fresh'){ modal({title:'Hacer el plan de cero', narrow:true, body:'<p style="margin-top:0">Se genera un plan nuevo con todas las reglas, <strong>sin</strong> respetar los cursos fijos ni los cambios a mano. Podrás deshacerlo con Restaurar.</p>', buttons:[{label:'Cancelar'},{label:'Hacer de cero',primary:true,onClick:function(){ var prev=clone(S.plan); session.editMode=false; regenerate(false,{fresh:true}); S.planBeforeFill=prev; save(); renderAll(); }}]}); }
+  else if(a==='regen-fresh'){ modal({title:'Empezar el plan de nuevo', narrow:true, body:'<p style="margin-top:0">Se genera un plan nuevo con todas las reglas, <strong>sin</strong> respetar los cursos fijos ni los cambios a mano. Puedes deshacerlo con "Deshacer el último cambio".</p>', buttons:[{label:'Cancelar'},{label:'Empezar de nuevo',primary:true,onClick:function(){ var prev=clone(S.plan); session.editMode=false; regenerate(false,{fresh:true}); S.planBeforeFill=prev; save(); renderAll(); }}]}); }
   else if(a==='reorg'){ var np=collectPins().n, prevPlan=clone(S.plan); session.editMode=false; regenerate(true); S.planBeforeFill=prevPlan; save(); renderAll(); toast('Plan reorganizado: '+np+' curso'+(np>1?'s':'')+' fijo'+(np>1?'s':'')+' en su lugar y el resto acomodado de nuevo.'); }
   else if(a==='toggle-pin'){ var fu=findCourse(btn.closest('[data-uid]').getAttribute('data-uid')); if(fu){ fu.c.pinned=!fu.c.pinned; commitEdit(); } }
   else if(a==='toggle-edit'){ session.editMode=!session.editMode; renderPlan(); }
