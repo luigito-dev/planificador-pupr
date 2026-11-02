@@ -436,6 +436,26 @@ header.top .help{border-color:rgba(255,255,255,.55)}
 .ac-row.hidden-term{display:none}
 .ac-st.moved{color:var(--accent)}
 .ac-st.moved.bad{color:var(--warn)}
+.trhead{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:baseline;margin:16px 0 8px}
+.trwrap{background:var(--paper);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.trterm{border-bottom:1px solid var(--line)}
+.trth{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;padding:9px 14px;background:var(--soft)}
+.trth strong{color:var(--accent);font-size:14.5px}
+.trsum{margin-left:auto;font-size:12.5px;color:var(--muted)}
+.trtbl{width:100%;border-collapse:collapse;font-size:13.5px;table-layout:fixed}
+.trtbl th{text-align:left;font-weight:500;color:var(--muted);font-size:12px;padding:5px 14px;border-bottom:1px solid var(--line)}
+.trtbl td{padding:6px 14px;border-bottom:1px solid #f0f2f5;vertical-align:middle}
+.trtbl tr:last-child td{border-bottom:0}
+.trtbl .code{font-weight:600;white-space:nowrap}
+.trtbl .cr,.trtbl th.cr{text-align:right}
+.trtbl .desc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.trtbl .act{text-align:right}
+.trtbl col.c1{width:110px} .trtbl col.c3{width:64px} .trtbl col.c4{width:60px} .trtbl col.c5{width:70px}
+.trtot{display:flex;flex-wrap:wrap;gap:6px 22px;justify-content:flex-end;padding:10px 14px;font-size:13.5px;color:var(--muted)}
+.trtot strong{color:var(--ink)}
+@media (max-width:680px){ .trtbl td,.trtbl th{padding:6px 6px} .trtbl col.c1{width:84px} .trtbl col.c3{width:26px} .trtbl col.c4{width:38px} .trtbl col.c5{width:50px} .trtbl .code{font-size:12.5px} .trtbl .desc{white-space:normal;font-size:12.5px} .trsum{margin-left:0;flex-basis:100%} }
+.infopop{position:fixed;right:16px;bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:69;max-width:320px;background:var(--paper);color:var(--ink);border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.14);padding:12px 14px;font-size:14px;animation:fabIn .2s ease-out}
+@media (max-width:680px){ .infopop{left:12px;right:12px;max-width:none} }
 .warnpop{position:fixed;right:16px;top:16px;z-index:70;max-width:360px;background:#fff8e6;color:#5c3d00;border:1px solid #f0c36d;border-left:4px solid var(--warn);border-radius:10px;padding:10px 14px;font-size:14px;box-shadow:0 10px 30px rgba(0,0,0,.15);cursor:pointer}
 .warnpop strong{display:block;margin-bottom:2px}
 @media (max-width:680px){ .warnpop{left:12px;right:12px;max-width:none} }
@@ -2212,10 +2232,10 @@ function reviewHTML(pendingSlots){
   var chips=[], n=0, items=[];
   session.review=null;
   al.forEach(function(a){ items.push({t:a.t, bad:a.lvl==='bad'}); });
-  if(pendingSlots) items.push({t:pendingSlots+' electiva'+(pendingSlots>1?'s':'')+' por escoger.', act:'electives-pending', actLabel:'Escoger electivas', act2:'open-audit', act2Label:'Ver currículo'});
+
   if(miss.length) items.push({t:'Faltan '+miss.length+' curso'+(miss.length>1?'s':'')+' por planificar: '+miss.map(function(c){return c.code;}).join(', ')+'.'});
   if(uns.length) items.push({t:uns.length+' curso'+(uns.length>1?'s':'')+' sin ubicar: '+uns.map(function(u){return u.code;}).join(', ')+'.', bad:true});
-  if(pendingSlots){ chips.push('<span class="chip">'+pendingSlots+' electiva'+(pendingSlots>1?'s':'')+' por escoger</span>'); n++; }
+  if(false){ chips.push('<span class="chip">'+pendingSlots+' electiva'+(pendingSlots>1?'s':'')+' por escoger</span>'); n++; }
   if(miss.length){ chips.push('<span class="chip">Faltan '+miss.length+' curso'+(miss.length>1?'s':'')+'</span>'); n++; }
   if(uns.length){ chips.push('<span class="chip bad">'+uns.length+' sin ubicar</span>'); n++; }
   if(al.length){ chips.push('<span class="chip'+(nb?' bad':' b')+'">'+al.length+' alerta'+(al.length>1?'s':'')+'</span>'); n+=al.length; }
@@ -2230,8 +2250,10 @@ function reviewHTML(pendingSlots){
       miss.map(function(c){ return '<tr><td><strong>'+esc(c.code)+'</strong></td><td>'+esc(c.name||'')+(c.type==='ELEC'?' '+elecTag(c.group):'')+(c.type==='PREP'?' <span class="tag">prep.</span>':'')+'</td><td class="num">'+fmtCr(c.credits)+'</td><td class="small muted">'+esc(c.prereqText||'')+'</td></tr>'; }).join('')+
       '</tbody></table><div class="row" style="margin-top:10px"><button class="btn sm primary" data-action="acomodar">Acomodar automáticamente</button></div>';
   }
+  if(!items.length) return '';
   var sig=chips.join('|').replace(/<[^>]+>/g,'');
   session.review={ items:items, body:'<div class="chips" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">'+chips.join('')+'</div>'+body, sig:sig, n:n };
+  if(!chips.length) chips.push('');
   return '<button class="spill warn'+(nb||uns.length?' bad':'')+'" id="reviewBox" data-action="review-open" title="Toca para ver las alertas"><b>'+items.length+'</b> Alertas</button>';
 }
 /** Alertas: lista sencilla; las electivas se pueden escoger o ver desde aquí. */
@@ -2302,7 +2324,7 @@ function planWindow(edit){
   });
   var rest=[];
   if(cut>=0) S.plan.terms.slice(cut).forEach(function(t){ t.courses.forEach(function(c){ rest.push(c); }); });
-  return {idx:idx, rest:rest, restCr:rest.reduce(function(s,c){return s+Core.num(c.credits);},0), limited:cut>=0, n:n};
+  return {idx:idx, rest:rest, restCr:rest.reduce(function(s,c){return s+Core.num(c.credits);},0), limited:cut>=0, n:n, cut:cut};
 }
 /* ---------------- Restaurar ---------------- */
 var LOAD_KEYS=['maxCredits','maxCourses','includeSummer','summerMax'];
@@ -2765,7 +2787,7 @@ function wizardHTML(){
     '</ol><p class="small muted" style="margin:10px 0 0">¿Dudas? Toca <strong>Ayuda</strong> arriba a la derecha.</p></div>';
 }
 /* ---------------- Ayuda ---------------- */
-var APP_VERSION='2 nov 2026 · 8:00 am';
+var APP_VERSION='2 nov 2026 · 8:30 am';
 function openHelp(){
   var sec=function(t,items){ return '<h4 style="margin:16px 0 6px">'+t+'</h4><ul style="margin:0;padding-left:20px">'+items.map(function(i){return '<li style="margin:4px 0">'+i+'</li>';}).join('')+'</ul>'; };
   var body='<p style="margin-top:0">El planificador arma el plan de estudios de cada estudiante, trimestre por trimestre, siguiendo los prerrequisitos y las reglas de PUPR.</p>'+
@@ -2829,7 +2851,6 @@ function renderPlan(){
         '<button role="menuitem" data-action="del-student" class="danger-item">Borrar estudiante</button></div></div>'; })()+
       '<div class="menu"><button class="btn ghost" data-action="menu" aria-haspopup="true" aria-expanded="false">Más ▾</button><div class="menu-list" role="menu">'+
 
-        (planWindow(edit).limited?'<button role="menuitem" data-action="add-term">Agregar trimestre</button>':'')+
         '<button role="menuitem" data-action="open-audit">Ver currículo</button>'+
         '<button role="menuitem" data-action="cost-settings">Tarifas</button><hr>'+
         '<button role="menuitem" data-action="blank-plan">Empezar plan en blanco</button>'+
@@ -2843,8 +2864,7 @@ function renderPlan(){
     var loadSum=pr.maxCredits+' créditos'+(Core.num(pr.maxCourses)?' · máx. '+pr.maxCourses+' clases':'')+(pr.includeSummer?' · Summer: '+(Core.num(pr.summerMax)||pr.maxCredits)+' créditos':' · sin Summer')+'';
     html+='<div class="loadrow"><details class="loadbox" id="loadBox"'+(session.loadOpen?' open':'')+'><summary><span class="muted">Carga por trimestre:</span> <strong>'+esc(loadSum)+'</strong> <span class="chg">Cambiar</span></summary>'+loadIn+'</details>'+
       '<span class="lrsp"></span><label class="lrterms">Trimestres a planificar <select id="loadTerms">'+[0,1,2,3,4,5,6,8,9,12].map(function(v){return '<option value="'+v+'"'+(v===(Core.num(S.planTerms)||0)?' selected':'')+'>'+(v?v:'Todos')+'</option>';}).join('')+'</select></label>'+
-      '<button class="spill act" data-action="fastest" title="Compara cuánto se acorta el plan con más créditos o con Summer">Terminar antes</button>'+
-      '<button class="spill'+(costCfg().on?' on':'')+'" data-action="cost-toggle" aria-pressed="'+(costCfg().on?'true':'false')+'" title="'+(costCfg().on?'Ocultar':'Mostrar')+' el costo aproximado">COSTOS</button>'+rvHTML+'</div>';
+rvHTML+'</div>';
   if(edit && rvHTML) html+='<div class="loadrow">'+rvHTML+'</div>';
   if(S.historyChanged) html+='<div class="notice info">El plan tiene cambios manuales y el historial o las reglas cambiaron. Los cursos aprobados y las electivas ya se actualizaron. <button class="btn link" data-action="acomodar">Acomodar automáticamente</button></div>';
   var sgMap=slotGroupMap(cur), stP=Core.buildStatus(cur,S.records,S.plannerRules);
@@ -2863,7 +2883,7 @@ function renderPlan(){
   html+='<div class="years'+(edit?' editing':'')+'">';
   years.forEach(function(y, yi){
     var ycr=y.terms.reduce(function(s,ti){ return s+Core.termCredits(S.plan.terms[ti]); },0);
-    html+='<section class="yearblock"><div class="yh"><h3>Año '+(yi+1)+'</h3><span class="muted">'+y.ay+'–'+(y.ay+1)+'</span>'+'<span class="ycr">'+fmtCr(ycr)+' créditos</span></div><div class="ygrid'+(pr.includeSummer||y.terms.length>3?' four':'')+'">';
+    html+='<section class="yearblock"><div class="yh"><h3>Año '+(yi+1)+'</h3><span class="muted">'+y.ay+'–'+(y.ay+1)+'</span>'+(yi===0?'<span class="ypills"><button class="spill act" data-action="fastest" title="Compara cuánto se acorta el plan con más créditos o con Summer">Terminar antes</button><button class="spill'+(cOn?' on':'')+'" data-action="cost-toggle" aria-pressed="'+(cOn?'true':'false')+'" title="'+(cOn?'Ocultar':'Mostrar')+' el costo aproximado">COSTOS</button></span>':'')+'<span class="ycr">'+fmtCr(ycr)+' créditos</span></div><div class="ygrid'+(pr.includeSummer||y.terms.length>3?' four':'')+'">';
     y.terms.forEach(function(ti){
       var t=S.plan.terms[ti];
       var cr=Core.termCredits(t), cap=Core.termCap(t,pr), flag='';
@@ -2894,10 +2914,11 @@ function renderPlan(){
   if(!win.limited) html+='<div class="newterm-drop">Suelta aquí para ponerla en un trimestre nuevo</div>';
   html+='</div>';
   if(win.limited) html+='<div class="notice info" style="display:block"><strong>Se muestran '+win.n+' trimestre'+(win.n>1?'s':'')+'.</strong> Después quedan '+win.rest.length+' cursos ('+fmtCr(win.restCr)+' créditos) por planificar; la graduación estimada sigue siendo '+esc(academicSummary().grad)+'. <button class="btn link" data-action="plan-all">Ver plan completo</button></div>';
-  if(!win.limited) html+='<button class="btn" data-action="add-term" style="margin-top:14px">+ Agregar trimestre</button>';
+  html+='<button class="btn" data-action="add-term"'+(win.limited?' data-before="'+win.cut+'"':'')+' style="margin-top:14px">+ Agregar trimestre</button>';
   if(S.plan.unscheduled.length) html+='<p class="small muted">* La fecha estimada no incluye los cursos que no se pudieron ubicar.</p>';
   el.innerHTML=html;
   updateFixButton();
+  maybeElectivePop(pendingSlots);
 }
 
 
@@ -3166,6 +3187,21 @@ function openRemoveScheduleCourse(uid){
       else { T.courses=T.courses.filter(function(x){ return x.uid!==uid; }); if(S.schedule&&S.schedule[key]){ delete S.schedule[key][uid]; delete S.schedule[key]['c:'+c.code]; } S.planEdited=true; toast(c.code+' quitada del horario y del plan.'); }
       save(); renderSchedule();
     }}]});
+}
+
+/** Aviso suave (no es alerta): electivas por escoger. Sale una vez por estudiante mientras la página está abierta. */
+var elecPopSeen={};
+function maybeElectivePop(n){
+  if(!n || session.tab!=='plan') return;
+  var k=S.currentId+'|'+n; if(elecPopSeen[k]) return; elecPopSeen[k]=1;
+  setTimeout(function(){
+    var old=document.querySelector('.infopop'); if(old) old.remove();
+    var w=document.createElement('div'); w.className='infopop'; w.setAttribute('role','status');
+    w.innerHTML='<div>Hay <strong>'+n+' electiva'+(n>1?'s':'')+'</strong> por escoger.</div><div class="row" style="margin-top:8px;gap:6px"><button class="btn sm primary" data-ip="go">Escoger ahora</button><button class="btn sm" data-ip="x">Más tarde</button></div>';
+    document.body.appendChild(w);
+    var tm=setTimeout(function(){ w.remove(); },9000);
+    w.addEventListener('click',function(e){ var b=e.target.closest('[data-ip]'); if(!b) return; clearTimeout(tm); w.remove(); if(b.getAttribute('data-ip')==='go') openElectives(null,{pendingOnly:true}); });
+  },600);
 }
 /* ---------------- Leer horarios desde una imagen (captura de la oferta de secciones) ---------------- */
 var TESS_V='5.1.1';
@@ -3440,14 +3476,33 @@ function renderHistory(){
     '<div><label class="k" for="gpaCalcEdit">GPA acumulado</label><input id="gpaCalcEdit" class="gpa-inline" style="font-size:24px" inputmode="decimal" value="'+(gpaOverride()!=null?fmt(gpaOverride()):(g.gpa==null?'':fmt(g.gpa)))+'" placeholder="—">'+
       (gpaOverride()!=null?'<span class="small muted" style="display:block">editado · <button class="btn link small" style="padding:0" data-action="gpa-calc">restaurar</button></span>':'')+'</div>'+
     '</div>';
-  html+='<h4 class="sec">Historial académico</h4><p class="small muted" style="margin:0 0 8px">Datos leídos del transcript'+(S.transcriptName?' ('+esc(S.transcriptName)+')':'')+'. Si algo se leyó mal, corrígelo con Editar.</p>';
-  html+='<table class="ctable hist"><colgroup><col style="width:104px"><col style="width:100px"><col><col style="width:76px"><col style="width:64px"><col style="width:76px"></colgroup>'+
-    '<thead><tr><th>Trimestre</th><th>Curso</th><th>Descripción</th><th class="cr">Créditos</th><th>Nota</th><th></th></tr></thead><tbody>'+
-    S.records.map(function(rec){
-      return '<tr data-rec="'+rec.id+'"><td class="term-col">'+esc(tS(rec.term))+'</td><td class="code">'+esc(rec.code)+'</td><td class="desc">'+esc(rec.title)+'</td>'+
-        '<td class="cr">'+fmtCr(rec.credits)+'</td><td class="st '+gradeClass(rec.grade)+'">'+esc(rec.grade)+'</td>'+
-        '<td class="act"><button class="btn sm" data-action="edit-rec">Editar</button></td></tr>';
-    }).join('')+'</tbody></table>'+
+  // Historial como un transcript: agrupado por trimestre, con créditos y GPA de cada trimestre.
+  var rowsBy={}; g.rows.forEach(function(r){ rowsBy[r.ref.id]=r; });
+  var groups=[], gi={};
+  S.records.forEach(function(rec){ var k=rec.term||'(sin trimestre)'; if(gi[k]==null){ gi[k]=groups.length; groups.push({term:k, recs:[]}); } groups[gi[k]].recs.push(rec); });
+  var ord=function(lbl){ var p=Core.Terms.parse(lbl); return p?termOrder(p):1e9; };
+  groups.sort(function(a,b){ return ord(a.term)-ord(b.term); });
+  var totAtt=0, totEarn=0;
+  html+='<div class="trhead"><h4 class="sec" style="margin:0">Historial académico</h4><span class="small muted">'+(S.transcriptName?esc(S.transcriptName)+' · ':'')+S.records.length+' cursos · Si algo se leyó mal, toca Editar.</span></div>';
+  html+='<div class="trwrap">';
+  groups.forEach(function(gp){
+    var att=0, earn=0, pts=0, gcr=0;
+    var body=gp.recs.map(function(rec){
+      var r=rowsBy[rec.id], gr=String(rec.grade||'').toUpperCase(), cr=Core.num(rec.credits), info=Core.gradeInfo(gr,S.gpaRules);
+      if(gr!=='IP'){ att+=cr; if(info.approved) earn+=cr; }
+      if(r && r.counts){ pts+=r.points; gcr+=r.credits; }
+      return '<tr data-rec="'+rec.id+'"><td class="code">'+esc(rec.code)+'</td><td class="desc">'+esc(rec.title||'')+(rec.rep==='E'?' <span class="tag">repetido</span>':'')+'</td>'+
+        '<td class="cr">'+fmtCr(cr)+'</td><td class="st '+gradeClass(rec.grade)+'">'+esc(rec.grade)+'</td>'+
+        '<td class="act"><button class="btn link small" data-action="edit-rec">Editar</button></td></tr>';
+    }).join('');
+    totAtt+=att; totEarn+=earn;
+    var tg=gcr?fmt(Core.trunc2?Core.trunc2(pts/gcr):Math.floor(pts/gcr*100)/100):'—';
+    var ip=gp.recs.every(function(r){ return String(r.grade).toUpperCase()==='IP'; });
+    html+='<section class="trterm"><div class="trth"><strong>'+esc(tS(gp.term))+'</strong>'+(ip?' <span class="tag">en progreso</span>':'')+
+      '<span class="trsum">'+(ip?fmtCr(gp.recs.reduce(function(s,r){ return s+Core.num(r.credits); },0))+' cr matriculados':'Intentados '+fmtCr(att)+' · Aprobados '+fmtCr(earn)+' · GPA del trimestre '+tg)+'</span></div>'+
+      '<table class="trtbl"><colgroup><col class="c1"><col><col class="c3"><col class="c4"><col class="c5"></colgroup><thead><tr><th>Curso</th><th>Descripción</th><th class="cr">Cr</th><th>Nota</th><th></th></tr></thead><tbody>'+body+'</tbody></table></section>';
+  });
+  html+='<div class="trtot"><span>Total intentados <strong>'+fmtCr(totAtt)+'</strong></span><span>Total aprobados <strong>'+fmtCr(totEarn)+'</strong></span><span>GPA acumulado <strong>'+(gpaOverride()!=null?fmt(gpaOverride()):(g.gpa==null?'—':fmt(g.gpa)))+'</strong></span></div></div>'+
     '<button class="btn link add" style="margin-top:8px" data-action="add-rec">+ Agregar curso al historial</button>';
   el.innerHTML=html;
 }
@@ -3459,6 +3514,7 @@ function gradeOptions(sel, allowBlank){
 
 function renderAll(){
   renderStudent(); renderTabs();
+  if(session.tab!=='plan'){ var ipo=document.querySelector('.infopop'); if(ipo) ipo.remove(); }
   if(session.tab==='hist') renderHistory(); else if(session.tab==='notes') renderNotes(); else if(session.tab==='sched') renderSchedule(); else renderPlan();
   updateFixButton();
 }
@@ -5191,7 +5247,7 @@ document.addEventListener('click',function(e){
   else if(a==='alerts-list') openAlertsList();
   else if(a==='del-term') openDeleteTerm(+btn.closest('.term').getAttribute('data-term'));
   else if(a==='add-course') openAddCourse(+btn.closest('.term').getAttribute('data-term'));
-  else if(a==='add-term') openAddTerm();
+  else if(a==='add-term') openAddTerm(btn.hasAttribute('data-before')?+btn.getAttribute('data-before'):undefined);
   else if(a==='add-term-before') openAddTerm(+btn.closest('.term').getAttribute('data-term'));
   else if(a==='edit-rec') openRecordEditor(btn.closest('tr').getAttribute('data-rec'));
   else if(a==='add-rec') openRecordEditor(null);
