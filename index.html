@@ -564,7 +564,7 @@ var Core = (function () {
   'use strict';
 
   /* ---------- Utilidades ---------- */
-  var CODE_RE = /([A-Z]{2,5})\s*-?\s*(\d{4}[A-Z]?)/;
+  var CODE_RE = /\b([A-Z]{2,5})\s*-?\s*(\d{4}[A-Z]?)/;
   function normCode(s) {
     var up = String(s || '').toUpperCase();
     var m = up.match(CODE_RE);
@@ -1706,6 +1706,10 @@ function load(){
     mig(s); Object.keys(s.roster||{}).forEach(function(k){ mig(s.roster[k]); });
     ['customOptions','prepExempt','offerOverrides','curricula'].forEach(function(key){ var m=s[key]; if(!m) return; Object.keys(REN).forEach(function(o){ if(m[o] && !m[REN[o]]){ m[REN[o]]=m[o]; } delete m[o]; }); });
     if(s.wizardSeen==null) s.wizardSeen = !!(s.plan || Object.keys(s.roster||{}).some(function(k){ return s.roster[k] && s.roster[k].plan; }));
+    // Limpieza: "Winter 2026", "Spring 2026", "Summer 2026" se leían por error como cursos (INTER 2026, PRING 2026, UMMER 2026)
+    var BOGUS=/^(INTER|PRING|UMMER)\s*-?\s*(19|20)\d\d$/i;
+    var clean=function(o){ if(o && Array.isArray(o.records)){ var n=o.records.length; o.records=o.records.filter(function(r){ return !BOGUS.test(String(r.code||'').trim()); }); if(o.records.length!==n && o.plan){ o.plan.terms&&o.plan.terms.forEach(function(tm){ tm.courses=tm.courses.filter(function(c){ return !BOGUS.test(String(c.code||'').trim()); }); }); } } };
+    clean(s); Object.keys(s.roster||{}).forEach(function(k){ clean(s.roster[k]); });
     s.gpaRules = Object.assign({}, Core.DEFAULT_GPA_RULES);   // regla de GPA de PUPR: interna, no se edita
     return s;
   }catch(e){ return null; }
@@ -2786,7 +2790,7 @@ function wizardHTML(){
     '</ol><p class="small muted" style="margin:10px 0 0">¿Dudas? Toca <strong>Ayuda</strong> arriba a la derecha.</p></div>';
 }
 /* ---------------- Ayuda ---------------- */
-var APP_VERSION='2 nov 2026 · 9:00 am';
+var APP_VERSION='2 nov 2026 · 10:30 am';
 function openHelp(){
   var sec=function(t,items){ return '<h4 style="margin:16px 0 6px">'+t+'</h4><ul style="margin:0;padding-left:20px">'+items.map(function(i){return '<li style="margin:4px 0">'+i+'</li>';}).join('')+'</ul>'; };
   var body='<p style="margin-top:0">El planificador arma el plan de estudios de cada estudiante, trimestre por trimestre, siguiendo los prerrequisitos y las reglas de PUPR.</p>'+
