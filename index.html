@@ -2796,7 +2796,7 @@ function wizardHTML(){
     '</ol><p class="small muted" style="margin:10px 0 0">¿Dudas? Toca <strong>Ayuda</strong> arriba a la derecha.</p></div>';
 }
 /* ---------------- Ayuda ---------------- */
-var APP_VERSION='3 nov 2026 · 12:30 pm';
+var APP_VERSION='3 nov 2026 · 3:30 pm';
 function openHelp(){
   var sec=function(t,items){ return '<h4 style="margin:16px 0 6px">'+t+'</h4><ul style="margin:0;padding-left:20px">'+items.map(function(i){return '<li style="margin:4px 0">'+i+'</li>';}).join('')+'</ul>'; };
   var body='<p style="margin-top:0">El planificador arma el plan de estudios de cada estudiante, trimestre por trimestre, siguiendo los prerrequisitos y las reglas de PUPR.</p>'+
@@ -4585,16 +4585,25 @@ function exportAuditPDF(){
   var W=792, M=36, a=academicSummary(), st=Core.buildStatus(cur,S.records,S.plannerRules), ex=exemptList();
   var byCode={}; cur.courses.forEach(function(c){byCode[c.code]=c;});
   var OY=LH_TOP-30;
-  doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(28,42,57);
-  doc.text(pdfSafe(currentBase()+' Degree Audit'+(specLabel(S.program)?' - '+specLabel(S.program):'')), M, 58+OY-14);
+  // Leyenda a la derecha (ancho según el texto) y título que se achica para no chocar con ella
+  var legend=[['Aprobado',[231,242,236]],['Fracasado',[248,230,231]],['En progreso',[230,238,246]],['Incompleto',[251,240,222]]];
+  doc.setFont('helvetica','normal'); doc.setFontSize(8.5);
+  var lw=legend.map(function(l){ return 14+doc.getTextWidth(l[0])+12; }), lTot=lw.reduce(function(s,x){return s+x;},0)-12;
+  var lx=W-M-lTot;
+  var title=pdfSafe(currentBase()+' Degree Audit'+(specLabel(S.program)?' - '+specLabel(S.program):''));
+  doc.setFont('helvetica','bold'); var ts=15; doc.setFontSize(ts);
+  while(ts>9 && doc.getTextWidth(title)>lx-M-14){ ts-=0.5; doc.setFontSize(ts); }
+  doc.setTextColor(28,42,57);
+  doc.text(title, M, 58+OY-14);
   doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(59,72,85);
   var d=new Date(); var ds=('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+'/'+d.getFullYear();
   var gradTxt=pdfSafe(String(a.grad).replace(' *',''));
   var hdr='Estudiante: '+pdfSafe(S.student.name||'-')+'     Núm.: '+pdfSafe(S.student.id||'-')+'     Fecha: '+ds+'     GPA: '+fmt(a.gpa)+'     Créditos: '+fmtCr(cur.requiredCredits-(a.pending||0))+' de '+fmtCr(cur.requiredCredits)+' aprobados     Graduación estimada: '+gradTxt;
   var hs=10; while(hs>7.5 && doc.getTextWidth(hdr)*(hs/doc.getFontSize())>W-2*M){ hs-=0.5; }
   doc.setFontSize(hs); doc.text(hdr, M, 74+OY-14); doc.setFontSize(10);
-  var legend=[['Aprobado',[231,242,236]],['Fracasado',[248,230,231]],['En progreso',[230,238,246]],['Incompleto',[251,240,222]]];
-  var lx=W-M-4*78; legend.forEach(function(l,i){ doc.setFillColor.apply(doc,l[1]); doc.rect(lx+i*78,36+OY,10,10,'F'); doc.setFontSize(8.5); doc.text(l[0], lx+i*78+14, 44+OY); });
+  doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(59,72,85);
+  var lxx=lx; legend.forEach(function(l,i){ doc.setFillColor.apply(doc,l[1]); doc.setDrawColor(200,205,212); doc.rect(lxx,36+OY,10,10,'FD'); doc.text(l[0], lxx+14, 44+OY); lxx+=lw[i]; });
+  doc.setFontSize(10);
   var body=[], status=[];
   var sections=[], bySec={};
   cur.courses.forEach(function(c){ if(!bySec[c.section]){ bySec[c.section]=[]; sections.push(c.section); } bySec[c.section].push(c); });
