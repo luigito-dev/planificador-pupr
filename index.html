@@ -302,6 +302,7 @@ pre.raw{white-space:pre-wrap;font-size:12px;background:var(--soft);padding:12px;
 .loadbar label{display:flex;gap:6px;align-items:center}
 .loadbar select{padding:4px 8px;font-size:14px}
 /* Probatoria */
+.uklist{list-style:none;margin:0 0 12px;padding:0;display:grid;gap:8px} .ukcard{border:1px solid var(--line);border-radius:10px;padding:9px 12px} .ukh{display:flex;flex-wrap:wrap;gap:6px;align-items:baseline;margin-bottom:3px} .ukp{margin-left:auto;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px} .ukp.hi{background:#fde8e8;color:#a32020} .ukp.md{background:#fff3dc;color:#8a5a00} .ukp.lo{background:#eef2f6;color:#4a5563} .ukt{margin:10px 0 6px;font-size:13px}
 .problg{font-weight:500} .problg b{font-weight:700} .problg.bad{color:var(--danger)} .problg.warn{color:var(--warn)} .problg.ok b{color:var(--ok)}
 .probadge{display:inline-block;margin-top:6px;font-size:13px;font-weight:600;padding:3px 10px;border-radius:12px}
 .probadge.bad{background:color-mix(in srgb,var(--danger) 14%,transparent);color:var(--danger)}
@@ -2443,30 +2444,40 @@ function openUnlocks(){
   var have={}; (st.approvedCodes||[]).concat(st.ipCodes||[]).forEach(function(c){ have[c]=1; });
   exemptList().forEach(function(c){ have[c]=1; });
   var pend=function(code){ var s=st.byCode&&st.byCode[code]; return !have[code] && (!s || s.status==='pending'); };
-  var rows=cur.courses.filter(function(c){ return c.type!=='OPC' && pend(c.code); }).map(function(c){
-    var u=um[c.code]||{direct:[],all:[]}, all=u.all.filter(pend), dir=u.direct.filter(pend);
+  // Laboratorio que va junto a su clase (p. ej. SCIE 1215 con SCIE 1214): se muestra en la misma fila.
+  var labOf={};
+  cur.courses.forEach(function(c){ if(Core.num(c.credits)<=1 && /lab/i.test(c.name||'')) (c.coreqs||[]).forEach(function(ors){ if(ors.length===1 && byCode[ors[0]] && Core.num(byCode[ors[0]].credits)>1 && ors[0].split(' ')[0]===c.code.split(' ')[0]) labOf[c.code]=ors[0]; }); });
+  var rows=cur.courses.filter(function(c){ return c.type!=='OPC' && pend(c.code) && !labOf[c.code]; }).map(function(c){
+    var u=um[c.code]||{direct:[],all:[]}, dir=u.direct.filter(function(x){ return pend(x) && !labOf[x]; });
     var miss=(c.prereqs||[]).filter(function(ors){ return !ors.some(function(x){ return have[x] || !byCode[x]; }); }).map(function(ors){ return ors.join(' o '); });
+    var labs=cur.courses.filter(function(x){ return labOf[x.code]===c.code && pend(x.code); }).map(function(x){ return x.code; });
     var f=S.plan?findCourseByCode(c.code):null;
-    return {c:c, all:all.length, dir:dir, miss:miss, where:f?tS(S.plan.terms[f.ti].label):''};
-  }).filter(function(r){ return r.all>0; }).sort(function(a,b){ return b.all-a.all || (a.miss.length-b.miss.length) || (a.c.order-b.c.order); });
-  var top=rows.slice(0,15);
-  var body='<p style="margin-top:0" class="small muted">Clases pendientes que son prerrequisito de otras. Mientras más abre, más conviene tomarla pronto para no atrasar la cadena.</p>'+
-    (top.length?'<table class="plain"><thead><tr><th>Curso</th><th class="num">Abre</th><th>Estado</th><th>En el plan</th></tr></thead><tbody>'+top.map(function(r){
-      return '<tr><td><strong>'+esc(r.c.code)+'</strong> <span class="small muted">'+esc(r.c.name||'')+'</span><div class="small muted">Abre directo: '+esc(r.dir.slice(0,6).join(', ')+(r.dir.length>6?'…':''))+'</div></td>'+
-        '<td class="num"><strong>'+r.all+'</strong> <span class="small muted">clase'+(r.all>1?'s':'')+'</span></td>'+
-        '<td class="small">'+(r.miss.length?'Necesita '+esc(r.miss.join(', ')):'<span style="color:var(--ok)">Puede tomarla ya</span>')+'</td>'+
-        '<td class="small">'+(r.where?esc(r.where):'—')+'</td></tr>';
-    }).join('')+'</tbody></table>':'<p>No quedan clases pendientes que abran otras.</p>')+
-    '<p class="small" style="margin-bottom:0">'+(S.unlockFirst?'<strong>El plan está dando prioridad a las clases llave.</strong>':'Puedes rehacer el plan dando prioridad a estas clases. Siempre respeta prerrequisitos, correquisitos, oferta y la carga escogida.')+'</p>';
+    return {c:c, total:u.all.filter(pend).length, dir:dir, miss:miss, labs:labs, where:f?tS(S.plan.terms[f.ti].label):''};
+  }).filter(function(r){ return r.dir.length>0; }).sort(function(a,b){ return b.total-a.total || b.dir.length-a.dir.length || (a.c.order-b.c.order); });
+  var maxT=rows.length?rows[0].total:1;
+  var prio=function(r){ return r.total>=maxT*0.6?['Muy importante','hi']:r.total>=maxT*0.3?['Importante','md']:['Ayuda','lo']; };
+  var card=function(r){
+    var p=prio(r), names=r.dir.slice(0,5).join(', ')+(r.dir.length>5?' y '+(r.dir.length-5)+' más':'');
+    return '<li class="ukcard"><div class="ukh"><strong>'+esc(r.c.code)+'</strong>'+(r.labs.length?' <span class="small muted">+ '+esc(r.labs.join(', '))+' (lab)</span>':'')+' <span class="small muted">'+esc(r.c.name||'')+'</span><span class="ukp '+p[1]+'">'+p[0]+'</span></div>'+
+      '<div class="small">Al aprobarla puede tomar <strong>'+r.dir.length+' clase'+(r.dir.length>1?'s':'')+' nueva'+(r.dir.length>1?'s':'')+'</strong>: '+esc(names)+'.</div>'+
+      (r.miss.length?'<div class="small muted">Antes necesita '+esc(r.miss.join(', '))+'.</div>':'')+
+      '<div class="small muted">'+(r.where?'En el plan: '+esc(r.where):'Todavía no está en el plan')+'</div></li>';
+  };
+  var now=rows.filter(function(r){ return !r.miss.length; }).slice(0,8), later=rows.filter(function(r){ return r.miss.length; }).slice(0,6);
+  var body='<p style="margin-top:0">Estas clases son <strong>prerrequisito de otras</strong>. Si se atrasan, se atrasa lo que viene después. Por eso conviene tomarlas pronto.</p>'+
+    (now.length?'<h5 class="ukt">Puede tomarlas ya</h5><ul class="uklist">'+now.map(card).join('')+'</ul>':'')+
+    (later.length?'<h5 class="ukt">Más adelante (le falta un prerrequisito)</h5><ul class="uklist">'+later.map(card).join('')+'</ul>':'')+
+    (!rows.length?'<p>No quedan clases pendientes que abran otras.</p>':'')+
+    '<p class="small" style="margin-bottom:0">'+(S.unlockFirst?'<strong>El plan ya está poniendo primero estas clases.</strong>':'Si quieres, el sistema rehace el plan poniendo primero estas clases. Siempre respeta prerrequisitos, oferta y la carga escogida.')+'</p>';
   var apply=function(on){
-    var go=function(){ S.unlockFirst=on; save(); regenerate(true); toast(on?'Plan rehecho dando prioridad a las clases llave.':'Plan rehecho con el orden normal.'); };
+    var go=function(){ S.unlockFirst=on; save(); regenerate(true); toast(on?'Plan rehecho poniendo primero las clases que abren más clases.':'Plan rehecho con el orden normal.'); };
     if(S.planEdited) modal({title:'Rehacer el plan', narrow:true, body:'<p style="margin-top:0">El plan tiene cambios manuales. Para aplicar esto se rehace el plan.</p>', buttons:[{label:'Cancelar'},{label:'Rehacer',primary:true,onClick:go}]});
     else go();
   };
   var btns=[{label:'Cerrar'}];
   if(S.unlockFirst) btns.push({label:'Volver al orden normal', onClick:function(){ apply(false); }});
-  else if(top.length) btns.push({label:'Planificar con prioridad a estas clases', primary:true, onClick:function(){ apply(true); }});
-  modal({title:'Clases llave', wide:true, body:body, buttons:btns});
+  else if(rows.length) btns.push({label:'Rehacer el plan con estas clases primero', primary:true, onClick:function(){ apply(true); }});
+  modal({title:'Clases que abren más clases', wide:true, body:body, buttons:btns});
 }
 
 /* ---------------- Comparar programas ---------------- */
@@ -2864,7 +2875,7 @@ function wizardHTML(){
     '</ol><p class="small muted" style="margin:10px 0 0">¿Dudas? Toca <strong>Ayuda</strong> arriba a la derecha.</p></div>';
 }
 /* ---------------- Ayuda ---------------- */
-var APP_VERSION='10 nov 2026 · 2:00 pm';
+var APP_VERSION='10 nov 2026 · 2:30 pm';
 function openHelp(){
   var sec=function(t,items){ return '<h4 style="margin:16px 0 6px">'+t+'</h4><ul style="margin:0;padding-left:20px">'+items.map(function(i){return '<li style="margin:4px 0">'+i+'</li>';}).join('')+'</ul>'; };
   var body='<p style="margin-top:0">El planificador arma el plan de estudios de cada estudiante, trimestre por trimestre, siguiendo los prerrequisitos y las reglas de PUPR.</p>'+
@@ -2960,7 +2971,7 @@ rvHTML+'</div>';
   html+='<div class="years'+(edit?' editing':'')+'">';
   years.forEach(function(y, yi){
     var ycr=y.terms.reduce(function(s,ti){ return s+Core.termCredits(S.plan.terms[ti]); },0);
-    html+='<section class="yearblock"><div class="yh"><h3>Año '+(yi+1)+'</h3><span class="muted">'+y.ay+'–'+(y.ay+1)+'</span>'+(yi===0?'<span class="ypills"><button class="spill act" data-action="fastest" title="Compara cuánto se acorta el plan con más créditos o con Summer">Terminar antes</button><button class="spill'+(S.unlockFirst?' on':'')+'" data-action="unlocks" title="Clases que abren más clases (prerrequisitos de muchas otras)">Clases llave</button><button class="spill'+(cOn?' on':'')+'" data-action="cost-toggle" aria-pressed="'+(cOn?'true':'false')+'" title="'+(cOn?'Ocultar':'Mostrar')+' el costo aproximado">COSTOS</button></span>':'')+'<span class="ycr">'+fmtCr(ycr)+' créditos</span></div><div class="ygrid'+(pr.includeSummer||y.terms.length>3?' four':'')+'">';
+    html+='<section class="yearblock"><div class="yh"><h3>Año '+(yi+1)+'</h3><span class="muted">'+y.ay+'–'+(y.ay+1)+'</span>'+(yi===0?'<span class="ypills"><button class="spill act" data-action="fastest" title="Compara cuánto se acorta el plan con más créditos o con Summer">Terminar antes</button><button class="spill'+(S.unlockFirst?' on':'')+'" data-action="unlocks" title="Clases que son prerrequisito de muchas otras: conviene tomarlas pronto">Clases que abren más</button><button class="spill'+(cOn?' on':'')+'" data-action="cost-toggle" aria-pressed="'+(cOn?'true':'false')+'" title="'+(cOn?'Ocultar':'Mostrar')+' el costo aproximado">COSTOS</button></span>':'')+'<span class="ycr">'+fmtCr(ycr)+' créditos</span></div><div class="ygrid'+(pr.includeSummer||y.terms.length>3?' four':'')+'">';
     y.terms.forEach(function(ti){
       var t=S.plan.terms[ti];
       var cr=Core.termCredits(t), cap=Core.termCap(t,pr), flag='';
