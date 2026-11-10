@@ -2323,16 +2323,13 @@ function missingHTML(){
 /** Índices de los trimestres que se muestran (los primeros N con cursos). 0 = todos. */
 function planWindow(edit){
   var n=Core.num(S.planTerms)||0, idx=[], shown=0, cut=-1;
-  // Siempre al menos 1 trimestre sugerido además del de cursos IP; si no hay IP, al menos 2.
-  if(n){ var hasIP=S.plan.terms.some(function(t){ return t.courses.length && t.courses.every(function(c){ return c.grade==='IP' || c.fixed; }); }); n=Math.max(n, hasIP?1:2); }
+  // Se cuenta desde el primer trimestre del plan, incluido el de cursos en progreso (IP): 1 = solo el primero.
   S.plan.terms.forEach(function(t,i){
     if(cut>=0) return;
     var has=t.courses.length>0;
     if(!has && !edit && !t.manual) return;
-    // El trimestre de cursos en progreso (IP) no cuenta: siempre se ve además de los trimestres con clases sugeridas.
-    var ipOnly=has && t.courses.every(function(c){ return c.grade==='IP' || c.fixed; });
-    if(n && has && !ipOnly && shown>=n){ cut=i; return; }
-    idx.push(i); if(has && !ipOnly) shown++;
+    if(n && has && shown>=n){ cut=i; return; }
+    idx.push(i); if(has) shown++;
   });
   var rest=[];
   if(cut>=0) S.plan.terms.slice(cut).forEach(function(t){ t.courses.forEach(function(c){ rest.push(c); }); });
@@ -2799,7 +2796,7 @@ function wizardHTML(){
     '</ol><p class="small muted" style="margin:10px 0 0">¿Dudas? Toca <strong>Ayuda</strong> arriba a la derecha.</p></div>';
 }
 /* ---------------- Ayuda ---------------- */
-var APP_VERSION='5 nov 2026 · 4:00 pm';
+var APP_VERSION='9 nov 2026 · 8:45 pm';
 function openHelp(){
   var sec=function(t,items){ return '<h4 style="margin:16px 0 6px">'+t+'</h4><ul style="margin:0;padding-left:20px">'+items.map(function(i){return '<li style="margin:4px 0">'+i+'</li>';}).join('')+'</ul>'; };
   var body='<p style="margin-top:0">El planificador arma el plan de estudios de cada estudiante, trimestre por trimestre, siguiendo los prerrequisitos y las reglas de PUPR.</p>'+
