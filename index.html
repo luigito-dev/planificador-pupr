@@ -1100,6 +1100,20 @@ var Core = (function () {
     return { ENGL: 1, INGL: 1, SPAN: 2, ESPA: 2, MATH: 3 }[subj] != null ? { ENGL: 1, INGL: 1, SPAN: 2, ESPA: 2, MATH: 3 }[subj] : 4;
   }
 
+  /** Para cada curso: los cursos que abre directamente y en total (cadena de prerrequisitos). */
+  function unlockMap(courses) {
+    var dependents = {};
+    courses.forEach(function (c) {
+      (c.prereqs || []).forEach(function (ors) { ors.forEach(function (p) { if (p !== c.code) { (dependents[p] = dependents[p] || []); if (dependents[p].indexOf(c.code) < 0) dependents[p].push(c.code); } }); });
+    });
+    var out = {};
+    courses.forEach(function (c) {
+      var seen = {}, stack = (dependents[c.code] || []).slice();
+      while (stack.length) { var x = stack.pop(); if (seen[x] || x === c.code) continue; seen[x] = true; (dependents[x] || []).forEach(function (y) { stack.push(y); }); }
+      out[c.code] = { direct: (dependents[c.code] || []).slice(), all: Object.keys(seen) };
+    });
+    return out;
+  }
   function depthMap(courses) {
     var dependents = {};
     courses.forEach(function (c) {
@@ -1144,7 +1158,7 @@ var Core = (function () {
     curr.courses.forEach(function (c) { byCurr[c.code] = c; });
     Object.keys(pinCodes).forEach(function (code) { var o = byCurr[code]; if (o && o.type === 'OPC') pinGroup[o.group] = (pinGroup[o.group] || 0) + 1; });
     Object.keys(pinSlots).forEach(function (s) { var o = byCurr[s]; if (o && o.type === 'ELEC') pinGroup[o.group] = Math.max(0, (pinGroup[o.group] || 0)); });
-    var depth = depthMap(curr.courses);
+    var depth = depthMap(curr.courses), unl = unlockMap(curr.courses);
     // Ruta crítica: cursos en la cadena más larga (p. ej. los 15 talleres de Arquitectura).
     var height = {}, byC = {};
     curr.courses.forEach(function (c) { byC[c.code] = c; });
@@ -1208,6 +1222,8 @@ var Core = (function () {
     var allKnown = new Set(st.approvedCodes.concat(exempt, st.ipCodes, pending.map(function (u) { return u.code; })));
 
     function cmp(a, b) {
+      // Opción del consejero: primero las clases que abren más clases.
+      if (pr.unlockFirst) { var ua = (unl[a.code] || { all: [] }).all.length, ub = (unl[b.code] || { all: [] }).all.length; if (ua !== ub) return ub - ua; }
       // Programas con secuencial oficial (columna 9): se sigue el orden del papel.
       if (a.seq && b.seq) {
         // Los cursos que abren cadena (p. ej. talleres) no esperan a sobrantes del trimestre anterior del papel.
@@ -1660,7 +1676,7 @@ var Core = (function () {
     gradeInfo: gradeInfo, isPrepCode: isPrepCode, computeGPA: computeGPA, completionRate: completionRate, gpaScenarios: gpaScenarios,
     round2: round2, trunc2: trunc2,
     parseTranscriptText: parseTranscriptText, parseCurriculum: parseCurriculum, draftCurriculumFromText: draftCurriculumFromText,
-    buildStatus: buildStatus, EQUIVALENTS: EQUIVALENTS, generatePlan: generatePlan, validatePlacement: validatePlacement,
+    buildStatus: buildStatus, EQUIVALENTS: EQUIVALENTS, generatePlan: generatePlan, unlockMap: unlockMap, validatePlacement: validatePlacement,
     termCredits: termCredits, termCap: termCap, termCourseCap: termCourseCap, classCount: classCount, parseOffer: parseOffer, offeredIn: offeredIn, subjectClash: subjectClash, limitedSubjects: limitedSubjects, doneBeforeIndex: doneBeforeIndex, relabel: relabel, misplacedCourses: misplacedCourses, fixMisplaced: fixMisplaced, missingPrereqs: missingPrereqs, whereIs: whereIs, withWhere: withWhere
   };
 })();
@@ -1788,7 +1804,7 @@ function gpaResult(){ return Core.computeGPA(S.records, S.gpaRules, prepTypeOf(c
 function baseDone(){ return new Set(Core.buildStatus(curr(), S.records, S.plannerRules).approvedCodes.concat(exemptList())); }
 
 /* ---------------- Varios estudiantes ---------------- */
-var STUDENT_FIELDS=['schedule','reviewHidden','notes','histNew','planBeforeFill','prevProgram','planTerms','student','records','officialGPA','officialTotals','termLimits','useOfficialGPA','gpaOverride','transcriptText','transcriptName','plan','planOriginal','planEdited','historyChanged','electiveSel','prepExempt','program','programBase'];
+var STUDENT_FIELDS=['unlockFirst','schedule','reviewHidden','notes','histNew','planBeforeFill','prevProgram','planTerms','student','records','officialGPA','officialTotals','termLimits','useOfficialGPA','gpaOverride','transcriptText','transcriptName','plan','planOriginal','planEdited','historyChanged','electiveSel','prepExempt','program','programBase'];
 function snapshotStudent(){ var o={}; STUDENT_FIELDS.forEach(function(k){ o[k]=S[k]; }); o.updated=Date.now(); return JSON.parse(JSON.stringify(o)); }
 function hasStudentData(){ return !!(S.student && (S.student.name || S.student.id)) || S.records.length>0; }
 function blankStudentFields(){
@@ -1916,7 +1932,7 @@ function openStudents(){
 /* ---------------- Utilidades UI ---------------- */
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
 /** Reglas del planificador con los límites por trimestre del estudiante. */
-function prEff(){ return Object.assign({}, S.plannerRules, {termLimits:S.termLimits||{}}); }
+function prEff(){ return Object.assign({}, S.plannerRules, {termLimits:S.termLimits||{}, unlockFirst:!!S.unlockFirst}); }
 function tS(s){ return Core.Terms.short(s); }
 function fmt(x,d){ return x==null||isNaN(x) ? '—' : Number(x).toFixed(d==null?2:d); }
 function fmtCr(x){ x=Number(x)||0; return (Math.round(x*100)/100).toString(); }
@@ -1939,6 +1955,7 @@ function gradeClass(g){
   return 'g-done';
 }
 function modal(opts){
+  var ipo=document.querySelector('.infopop'); if(ipo) ipo.remove();   // el aviso flotante no tapa la ventana
   var ov=document.createElement('div'); ov.className='overlay';
   if(opts.sheet) ov.classList.add('sheeto');
   ov.innerHTML='<div class="modal'+(opts.narrow?' narrow':'')+(opts.wide?' wide':'')+(opts.sheet?' sheetm':'')+'" role="dialog" aria-modal="true" aria-labelledby="mt"><div class="grab" aria-hidden="true"></div><header><h3 id="mt">'+esc(opts.title)+
@@ -2415,6 +2432,40 @@ function openFastest(){
   });
 }
 
+/* ---------------- Clases llave: las que abren más clases ---------------- */
+function openUnlocks(){
+  var cur=curr(); if(!cur){ toast('Selecciona el programa primero.'); return; }
+  var st=Core.buildStatus(cur,S.records,S.plannerRules), um=Core.unlockMap(cur.courses), byCode={};
+  cur.courses.forEach(function(c){ byCode[c.code]=c; });
+  var have={}; (st.approvedCodes||[]).concat(st.ipCodes||[]).forEach(function(c){ have[c]=1; });
+  exemptList().forEach(function(c){ have[c]=1; });
+  var pend=function(code){ var s=st.byCode&&st.byCode[code]; return !have[code] && (!s || s.status==='pending'); };
+  var rows=cur.courses.filter(function(c){ return c.type!=='OPC' && pend(c.code); }).map(function(c){
+    var u=um[c.code]||{direct:[],all:[]}, all=u.all.filter(pend), dir=u.direct.filter(pend);
+    var miss=(c.prereqs||[]).filter(function(ors){ return !ors.some(function(x){ return have[x] || !byCode[x]; }); }).map(function(ors){ return ors.join(' o '); });
+    var f=S.plan?findCourseByCode(c.code):null;
+    return {c:c, all:all.length, dir:dir, miss:miss, where:f?tS(S.plan.terms[f.ti].label):''};
+  }).filter(function(r){ return r.all>0; }).sort(function(a,b){ return b.all-a.all || (a.miss.length-b.miss.length) || (a.c.order-b.c.order); });
+  var top=rows.slice(0,15);
+  var body='<p style="margin-top:0" class="small muted">Clases pendientes que son prerrequisito de otras. Mientras más abre, más conviene tomarla pronto para no atrasar la cadena.</p>'+
+    (top.length?'<table class="plain"><thead><tr><th>Curso</th><th class="num">Abre</th><th>Estado</th><th>En el plan</th></tr></thead><tbody>'+top.map(function(r){
+      return '<tr><td><strong>'+esc(r.c.code)+'</strong> <span class="small muted">'+esc(r.c.name||'')+'</span><div class="small muted">Abre directo: '+esc(r.dir.slice(0,6).join(', ')+(r.dir.length>6?'…':''))+'</div></td>'+
+        '<td class="num"><strong>'+r.all+'</strong> <span class="small muted">clase'+(r.all>1?'s':'')+'</span></td>'+
+        '<td class="small">'+(r.miss.length?'Necesita '+esc(r.miss.join(', ')):'<span style="color:var(--ok)">Puede tomarla ya</span>')+'</td>'+
+        '<td class="small">'+(r.where?esc(r.where):'—')+'</td></tr>';
+    }).join('')+'</tbody></table>':'<p>No quedan clases pendientes que abran otras.</p>')+
+    '<p class="small" style="margin-bottom:0">'+(S.unlockFirst?'<strong>El plan está dando prioridad a las clases llave.</strong>':'Puedes rehacer el plan dando prioridad a estas clases. Siempre respeta prerrequisitos, correquisitos, oferta y la carga escogida.')+'</p>';
+  var apply=function(on){
+    var go=function(){ S.unlockFirst=on; save(); regenerate(true); toast(on?'Plan rehecho dando prioridad a las clases llave.':'Plan rehecho con el orden normal.'); };
+    if(S.planEdited) modal({title:'Rehacer el plan', narrow:true, body:'<p style="margin-top:0">El plan tiene cambios manuales. Para aplicar esto se rehace el plan.</p>', buttons:[{label:'Cancelar'},{label:'Rehacer',primary:true,onClick:go}]});
+    else go();
+  };
+  var btns=[{label:'Cerrar'}];
+  if(S.unlockFirst) btns.push({label:'Volver al orden normal', onClick:function(){ apply(false); }});
+  else if(top.length) btns.push({label:'Planificar con prioridad a estas clases', primary:true, onClick:function(){ apply(true); }});
+  modal({title:'Clases llave', wide:true, body:body, buttons:btns});
+}
+
 /* ---------------- Comparar programas ---------------- */
 function curriculumFor(key){
   if(key===S.program) return curr();
@@ -2796,7 +2847,7 @@ function wizardHTML(){
     '</ol><p class="small muted" style="margin:10px 0 0">¿Dudas? Toca <strong>Ayuda</strong> arriba a la derecha.</p></div>';
 }
 /* ---------------- Ayuda ---------------- */
-var APP_VERSION='9 nov 2026 · 8:45 pm';
+var APP_VERSION='10 nov 2026 · 1:30 pm';
 function openHelp(){
   var sec=function(t,items){ return '<h4 style="margin:16px 0 6px">'+t+'</h4><ul style="margin:0;padding-left:20px">'+items.map(function(i){return '<li style="margin:4px 0">'+i+'</li>';}).join('')+'</ul>'; };
   var body='<p style="margin-top:0">El planificador arma el plan de estudios de cada estudiante, trimestre por trimestre, siguiendo los prerrequisitos y las reglas de PUPR.</p>'+
@@ -2892,7 +2943,7 @@ rvHTML+'</div>';
   html+='<div class="years'+(edit?' editing':'')+'">';
   years.forEach(function(y, yi){
     var ycr=y.terms.reduce(function(s,ti){ return s+Core.termCredits(S.plan.terms[ti]); },0);
-    html+='<section class="yearblock"><div class="yh"><h3>Año '+(yi+1)+'</h3><span class="muted">'+y.ay+'–'+(y.ay+1)+'</span>'+(yi===0?'<span class="ypills"><button class="spill act" data-action="fastest" title="Compara cuánto se acorta el plan con más créditos o con Summer">Terminar antes</button><button class="spill'+(cOn?' on':'')+'" data-action="cost-toggle" aria-pressed="'+(cOn?'true':'false')+'" title="'+(cOn?'Ocultar':'Mostrar')+' el costo aproximado">COSTOS</button></span>':'')+'<span class="ycr">'+fmtCr(ycr)+' créditos</span></div><div class="ygrid'+(pr.includeSummer||y.terms.length>3?' four':'')+'">';
+    html+='<section class="yearblock"><div class="yh"><h3>Año '+(yi+1)+'</h3><span class="muted">'+y.ay+'–'+(y.ay+1)+'</span>'+(yi===0?'<span class="ypills"><button class="spill act" data-action="fastest" title="Compara cuánto se acorta el plan con más créditos o con Summer">Terminar antes</button><button class="spill'+(S.unlockFirst?' on':'')+'" data-action="unlocks" title="Clases que abren más clases (prerrequisitos de muchas otras)">Clases llave</button><button class="spill'+(cOn?' on':'')+'" data-action="cost-toggle" aria-pressed="'+(cOn?'true':'false')+'" title="'+(cOn?'Ocultar':'Mostrar')+' el costo aproximado">COSTOS</button></span>':'')+'<span class="ycr">'+fmtCr(ycr)+' créditos</span></div><div class="ygrid'+(pr.includeSummer||y.terms.length>3?' four':'')+'">';
     y.terms.forEach(function(ti){
       var t=S.plan.terms[ti];
       var cr=Core.termCredits(t), cap=Core.termCap(t,pr), flag='';
@@ -5220,6 +5271,7 @@ document.addEventListener('click',function(e){
   else if(a==='undo-program') undoProgram();
   else if(a==='hide-prevprog'){ if(S.prevProgram) S.prevProgram.hidden=true; save(); renderPlan(); }
   else if(a==='fastest') openFastest();
+  else if(a==='unlocks') openUnlocks();
   else if(a==='import-audit') pickAuditFile();
   else if(a==='pdf-audit') askPDF(exportAuditPDF);
   else if(a==='clear-all') clearAll();
