@@ -302,6 +302,7 @@ pre.raw{white-space:pre-wrap;font-size:12px;background:var(--soft);padding:12px;
 .loadbar label{display:flex;gap:6px;align-items:center}
 .loadbar select{padding:4px 8px;font-size:14px}
 /* Probatoria */
+.problg{font-weight:500} .problg b{font-weight:700} .problg.bad{color:var(--danger)} .problg.warn{color:var(--warn)} .problg.ok b{color:var(--ok)}
 .probadge{display:inline-block;margin-top:6px;font-size:13px;font-weight:600;padding:3px 10px;border-radius:12px}
 .probadge.bad{background:color-mix(in srgb,var(--danger) 14%,transparent);color:var(--danger)}
 .probadge.warn{background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn)}
@@ -2184,14 +2185,15 @@ function openGPAEditor(){
 
 /* ---------------- Probatoria académica ---------------- */
 function probationStatus(){
-  var pr=S.plannerRules, items=[], level='ok';
-  if(!S.records.length) return {level:level, items:items};
+  var pr=S.plannerRules, items=[], level='ok', det={};
+  if(!S.records.length) return {level:level, items:items, det:det};
   var g=gpaResult();
   var src='calculado', gpa=g.gpa;
   if(gpaOverride()!=null){ gpa=gpaOverride(); src='editado'; }
   var minG=Core.num(pr.minGPA!=null?pr.minGPA:2), warnG=Core.num(pr.gpaWarn!=null?pr.gpaWarn:2.1);
   if(gpa!=null){
     var gr=Math.round(gpa*1000)/1000;
+    det.gpa=gpa; det.minG=minG; det.gpaLvl=gr<minG?'bad':gr<=warnG?'warn':'ok';
     if(gr<minG){ level='bad'; items.push({lvl:'bad',t:'Probatoria académica: GPA '+fmt(gpa,gpa*100%1?3:2)+' ('+src+'), por debajo de '+fmt(minG)+'.'}); }
     else if(gr<=warnG){ if(level!=='bad') level='warn'; items.push({lvl:'warn',t:'Atención: GPA '+fmt(gpa,3)+' ('+src+'), a punto de caer por debajo de '+fmt(minG)+' (aviso hasta '+fmt(warnG)+').'}); }
   }
@@ -2200,11 +2202,12 @@ function probationStatus(){
   else { cr=Core.completionRate(S.records); src2='calculado'; }
   if(cr.attempted>0){
     var rate=cr.passed/cr.attempted*100, minR=Core.num(pr.minRate!=null?pr.minRate:66), warnR=Core.num(pr.rateWarn!=null?pr.rateWarn:70);
+    det.rate=rate; det.minR=minR; det.passed=cr.passed; det.attempted=cr.attempted; det.rateLvl=rate<minR?'bad':rate<warnR?'warn':'ok';
     var txt=fmtCr(cr.passed)+' aprobados de '+fmtCr(cr.attempted)+' intentados = '+rate.toFixed(1)+'% ('+src2+')';
     if(rate<minR){ level='bad'; items.push({lvl:'bad',t:'Probatoria académica: '+txt+', por debajo de '+minR+'%.'}); }
     else if(rate<warnR){ if(level!=='bad') level='warn'; items.push({lvl:'warn',t:'Atención: '+txt+', cerca del mínimo de '+minR+'% (aviso por debajo de '+warnR+'%).'}); }
   }
-  return {level:level, items:items};
+  return {level:level, items:items, det:det};
 }
 
 /* ---------------- Alertas académicas ---------------- */
@@ -2772,8 +2775,22 @@ function renderStudent(){
       '<span><i class="dot" style="background:var(--ip)"></i>En progreso '+Math.round(pct(a.prog.ip))+'%</span>'+
       '<span><i class="dot" style="background:var(--bar-pend)"></i>Pendiente '+Math.round(pct(a.prog.pend))+'%</span>'+
       (a.prog.prepTotal?'<span>Preparatorios: '+a.prog.prepDone+' de '+a.prog.prepTotal+(a.prog.prepExempt?' ('+a.prog.prepExempt+' exentos)':'')+'</span>':'')+
+      probLegend()+
       '</div></div>' : '');
   fitSelects();
+}
+/** Probatoria en la línea de progreso: dice si es por promedio (GPA) o por créditos aprobados vs. intentados. */
+function probLegend(){
+  if(!S.records.length) return '';
+  var d=probationStatus().det||{}, parts=[], lvl='ok';
+  var gTxt=d.gpa!=null?'GPA '+fmt(d.gpa)+' (mín. '+fmt(d.minG)+')':'';
+  var rTxt=d.rate!=null?'aprobados '+fmtCr(d.passed)+' de '+fmtCr(d.attempted)+' intentados = '+d.rate.toFixed(0)+'% (mín. '+d.minR+'%)':'';
+  var bad=[], warn=[];
+  if(d.gpaLvl==='bad') bad.push('por promedio: '+gTxt); else if(d.gpaLvl==='warn') warn.push('por promedio: '+gTxt);
+  if(d.rateLvl==='bad') bad.push('por créditos: '+rTxt); else if(d.rateLvl==='warn') warn.push('por créditos: '+rTxt);
+  if(bad.length) return '<span class="problg bad"><b>En probatoria</b> '+esc(bad.join(' · '))+(warn.length?' · cerca '+esc(warn.join(' · ')):'')+'</span>';
+  if(warn.length) return '<span class="problg warn"><b>Cerca de probatoria</b> '+esc(warn.join(' · '))+'</span>';
+  return '<span class="problg ok"><b>Sin probatoria</b>'+(d.rate!=null?' · '+esc('aprobados '+d.rate.toFixed(0)+'% de lo intentado'):'')+'</span>';
 }
 /** Ajusta el ancho de Programa y Especialidad al texto escogido, para que no ocupen tanto espacio. */
 function fitSelects(){
@@ -2847,7 +2864,7 @@ function wizardHTML(){
     '</ol><p class="small muted" style="margin:10px 0 0">¿Dudas? Toca <strong>Ayuda</strong> arriba a la derecha.</p></div>';
 }
 /* ---------------- Ayuda ---------------- */
-var APP_VERSION='10 nov 2026 · 1:30 pm';
+var APP_VERSION='10 nov 2026 · 1:45 pm';
 function openHelp(){
   var sec=function(t,items){ return '<h4 style="margin:16px 0 6px">'+t+'</h4><ul style="margin:0;padding-left:20px">'+items.map(function(i){return '<li style="margin:4px 0">'+i+'</li>';}).join('')+'</ul>'; };
   var body='<p style="margin-top:0">El planificador arma el plan de estudios de cada estudiante, trimestre por trimestre, siguiendo los prerrequisitos y las reglas de PUPR.</p>'+
