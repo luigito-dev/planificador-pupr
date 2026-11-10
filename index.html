@@ -2864,7 +2864,7 @@ function wizardHTML(){
     '</ol><p class="small muted" style="margin:10px 0 0">¿Dudas? Toca <strong>Ayuda</strong> arriba a la derecha.</p></div>';
 }
 /* ---------------- Ayuda ---------------- */
-var APP_VERSION='10 nov 2026 · 1:45 pm';
+var APP_VERSION='10 nov 2026 · 2:00 pm';
 function openHelp(){
   var sec=function(t,items){ return '<h4 style="margin:16px 0 6px">'+t+'</h4><ul style="margin:0;padding-left:20px">'+items.map(function(i){return '<li style="margin:4px 0">'+i+'</li>';}).join('')+'</ul>'; };
   var body='<p style="margin-top:0">El planificador arma el plan de estudios de cada estudiante, trimestre por trimestre, siguiendo los prerrequisitos y las reglas de PUPR.</p>'+
@@ -3453,8 +3453,10 @@ function planSummaryText(){
     L.push('', tS(t.label)+' ('+fmtCr(Core.termCredits(t))+' créditos)'+(ipT?' - en curso':''));
     t.courses.forEach(function(c){ L.push('  • '+c.code+'  '+(c.name||'')+' ('+fmtCr(c.credits)+' cr)'+(c.placeholder?' - por escoger':'')); });
   });
-  if(win.limited) L.push('', 'Después de estos trimestres quedan '+win.rest.length+' cursos ('+fmtCr(win.restCr)+' créditos) por planificar.');
-  var miss=missingCourses(); if(miss.length) L.push('', 'Cursos que aún faltan por planificar: '+miss.map(function(c){ return c.code; }).join(', ')+'.');
+  if(S.missOn===true){   // misma opción que el PDF: "Incluir las clases que faltan"
+    if(win.limited) L.push('', 'Después de estos trimestres quedan '+win.rest.length+' cursos ('+fmtCr(win.restCr)+' créditos) por planificar.');
+    var miss=missingCourses(); if(miss.length) L.push('', 'Cursos que aún faltan por planificar: '+miss.map(function(c){ return c.code; }).join(', ')+'.');
+  }
   L.push('', 'Este plan es una guía y puede cambiar según la oferta de cursos y tu progreso académico. Si tienes preguntas, comunícate conmigo.', '');
   return L.concat(emailSignature()).join('\n');
 }
@@ -4865,9 +4867,9 @@ var SIGNER_DEFAULT={name:'', title:'Consejero en Rehabilitación', dept:'Centro 
 /** Pregunta antes de descargar si se incluye la firma del consejero al final. */
 function askPDF(fn, opts){
   opts=opts||{};
-  var sg=Object.assign({}, SIGNER_DEFAULT, S.signer||{}), on=!!S.signOn, nMiss=opts.missing?missingCourses().length:0, hasNotes=!!(opts.notes && S.notes && S.notes.trim());
+  var sg=Object.assign({}, SIGNER_DEFAULT, S.signer||{}), on=!!S.signOn, nMiss=opts.missing?(function(){ var w=S.plan?planWindow(false):{rest:[]}; return missingCourses().length+(w.limited?w.rest.length:0)+((S.plan&&S.plan.unscheduled)||[]).length; })():0, hasNotes=!!(opts.notes && S.notes && S.notes.trim());
   var costBox=opts.costs?'<div class="checklist" style="margin-bottom:8px"><label><input type="checkbox" data-costs'+(S.costsPdfOn?' checked':'')+'><span><strong>Incluir el costo aproximado por trimestre</strong><br><span class="small muted">Sale junto a cada trimestre, con una nota de que es aproximado.</span></span></label></div>':'';
-  var body=costBox+(hasNotes?'<div class="checklist" style="margin-bottom:8px"><label><input type="checkbox" data-notes'+(S.notesOn?' checked':'')+'><span><strong>Incluir las notas del consejero</strong><br><span class="small muted">Lo que escribiste en la pestaña Notas.</span></span></label></div>':'')+(nMiss?'<div class="checklist" style="margin-bottom:8px"><label><input type="checkbox" data-miss'+(S.missOn===false?'':' checked')+'><span><strong>Incluir los cursos que faltan por planificar ('+nMiss+')</strong><br><span class="small muted">Lista al final con los cursos que todavía no están en ningún trimestre.</span></span></label></div>':'')+'<div class="checklist"><label><input type="checkbox" data-sg-on'+(on?' checked':'')+'><span><strong>Incluir firma del consejero al final</strong><br><span class="small muted">Añade espacio para firmar y la fecha.</span></span></label></div>'+
+  var body=costBox+(hasNotes?'<div class="checklist" style="margin-bottom:8px"><label><input type="checkbox" data-notes'+(S.notesOn?' checked':'')+'><span><strong>Incluir las notas del consejero</strong><br><span class="small muted">Lo que escribiste en la pestaña Notas.</span></span></label></div>':'')+(nMiss?'<div class="checklist" style="margin-bottom:8px"><label><input type="checkbox" data-miss'+(S.missOn===true?' checked':'')+'><span><strong>Incluir las clases que faltan ('+nMiss+')</strong><br><span class="small muted">Lista al final con las clases que no salen en los trimestres de este plan. Sin marcar, el PDF lleva solo las clases planificadas.</span></span></label></div>':'')+'<div class="checklist"><label><input type="checkbox" data-sg-on'+(on?' checked':'')+'><span><strong>Incluir firma del consejero al final</strong><br><span class="small muted">Añade espacio para firmar y la fecha.</span></span></label></div>'+
     '<div data-sg-fields style="margin-top:12px"'+(on?'':' class="hidden"')+'>'+
     '<label class="field">Nombre del consejero (opcional)<input data-sg="name" value="'+esc(sg.name)+'" placeholder="Ej. Luis Rivera"></label>'+
     '<label class="field">Puesto<input data-sg="title" value="'+esc(sg.title)+'"></label>'+
@@ -5014,7 +5016,7 @@ function exportPlanPDF(opts){
       columnStyles:{0:{cellWidth:70,fontStyle:'bold'},2:{cellWidth:50,halign:'right'},3:{cellWidth:130}}}));
     y=doc.lastAutoTable.finalY+24;
   }
-  if(winP.limited){
+  if(winP.limited && session.includeMissing){
     if(y>640){ doc.addPage(); y=LH_TOP+10; }
     doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(28,42,57); doc.text('Cursos pendientes para trimestres futuros', 54, y);
     doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(100,110,120);
@@ -5024,7 +5026,7 @@ function exportPlanPDF(opts){
       columnStyles:{0:{cellWidth:70,fontStyle:'bold'},2:{cellWidth:50,halign:'right'}}}));
     y=doc.lastAutoTable.finalY+24;
   }
-  if(S.plan.unscheduled.length){
+  if(S.plan.unscheduled.length && session.includeMissing){
     if(y>660){ doc.addPage(); y=LH_TOP+10; }
     doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.text('Cursos por ubicar', 54, y);
     doc.autoTable(Object.assign({}, TABLE_STYLE, {startY:y+6, head:[['Curso','Descripción','Créditos','Motivo']],
