@@ -302,6 +302,7 @@ pre.raw{white-space:pre-wrap;font-size:12px;background:var(--soft);padding:12px;
 .loadbar label{display:flex;gap:6px;align-items:center}
 .loadbar select{padding:4px 8px;font-size:14px}
 /* Probatoria */
+.pcbig{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:0 0 10px;font-size:17px;background:#fdf1f1;border-color:#f1c4c4} .pcbig small{display:block;font-size:12.5px;color:var(--muted);margin-bottom:3px} .pcbig span{display:block;font-size:12.5px;color:var(--muted);margin-top:2px} .pcbig.ok{background:#e8f6ec;border-color:#8fd0a0;color:#1f7a3a;font-weight:600} .pcchips{display:flex!important;gap:6px;align-items:center;margin-top:8px!important} .pcchips button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:2px 12px;font-weight:700;cursor:pointer} .pcchips button.on{background:var(--brand,#0b4fa3);border-color:transparent;color:#fff} .pctip{background:#fff8e6;border-radius:10px;padding:9px 12px;margin:0 0 10px;font-size:14px} .pcsim{font-size:14px;margin:4px 0 8px} .pcsim input{width:56px} .pcdata summary{cursor:pointer;font-size:13px;color:var(--muted);margin-top:4px} .pcdata .pcgrid{margin-top:8px;grid-template-columns:repeat(2,1fr)}
 .pcgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px 12px;margin-bottom:6px} .pcgrid label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)} .pcgrid input,.pcgrid select{font-size:15px;color:var(--ink,inherit)} @media (max-width:680px){ .pcgrid{grid-template-columns:repeat(2,1fr)} } .pcok{color:var(--ok);font-weight:600;margin:2px 0 6px} .pcbad{color:var(--danger);margin:2px 0 6px} .pcsum{background:#eef4fb;border:1px solid #c8daf0;border-radius:10px;padding:10px 12px;margin:10px 0}
 .trfsum{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 10px} .trfsum>div{flex:1 1 150px;border-radius:10px;padding:10px 12px;border:1px solid var(--line)} .trfsum b{font-size:22px;margin-right:6px} .trfsum span{display:block;font-size:12px;color:var(--muted)} .trfsum .ok{background:#e8f6ec;border-color:#8fd0a0} .trfsum .no{background:#fde8e8;border-color:#f1b0b0} .trfsum .fl{background:#fff3dc;border-color:#f0cf8a} .trf td,.trf th{padding:5px 8px}
 .uklist{list-style:none;margin:0 0 12px;padding:0;display:grid;gap:8px} .ukcard{border:1px solid var(--line);border-radius:10px;padding:9px 12px} .ukh{display:flex;flex-wrap:wrap;gap:6px;align-items:baseline;margin-bottom:3px} .ukp{margin-left:auto;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px} .ukp.hi{background:#fde8e8;color:#a32020} .ukp.md{background:#fff3dc;color:#8a5a00} .ukp.lo{background:#eef2f6;color:#4a5563} .ukt{margin:10px 0 6px;font-size:13px}
@@ -2834,66 +2835,44 @@ function renderStudent(){
 function openProbCalc(){
   var g=gpaResult(), pr=S.plannerRules, cr0=(S.officialTotals&&S.officialTotals.attempted>0)?{attempted:S.officialTotals.attempted, passed:S.officialTotals.passed}:Core.completionRate(S.records);
   var gpa0=gpaOverride()!=null?gpaOverride():g.gpa, C0=g.gpaCredits||0;
-  // Clases con F o D que cuentan en el GPA: repetirlas reemplaza la nota (regla: se usa la nota más alta).
-  var reps=(g.rows||[]).filter(function(r){ return r.counts && r.info && r.info.pts<2 && r.credits>0; }).map(function(r){ return {code:r.code, cr:r.credits, pts:r.info.pts, grade:r.grade}; })
+  // Clases con F o D que cuentan en el GPA: al repetirlas cuenta la nota más alta.
+  var reps=(g.rows||[]).filter(function(r){ return r.counts && r.info && r.info.pts<2 && r.credits>0; }).map(function(r){ return {code:r.code, cr:r.credits, pts:r.info.pts}; })
     .sort(function(a,b){ return (a.pts-b.pts) || (b.cr-a.cr); });
-  var gOpt=function(sel){ return ['A','B','C'].map(function(x){ return '<option'+(x===sel?' selected':'')+'>'+x+'</option>'; }).join(''); };
-  var num=function(v,d){ return '<input type="number" step="any" inputmode="decimal" value="'+v+'" style="width:90px"'+d+'>'; };
-  var body='<p class="small muted" style="margin-top:0">Ya tiene los datos del estudiante. Puedes cambiarlos para probar otros casos.</p>'+
-    '<div class="pcgrid">'+
-      '<label>GPA actual'+num(gpa0!=null?fmt(gpa0):'0',' data-k="gpa"')+'</label>'+
-      '<label>Créditos que cuentan para el GPA'+num(fmtCr(C0),' data-k="c"')+'</label>'+
-      '<label>Créditos intentados'+num(fmtCr(cr0.attempted||0),' data-k="att"')+'</label>'+
-      '<label>Créditos aprobados'+num(fmtCr(cr0.passed||0),' data-k="pas"')+'</label>'+
-      '<label>GPA mínimo'+num(fmt(Core.num(pr.minGPA!=null?pr.minGPA:2)),' data-k="tg"')+'</label>'+
-      '<label>% mínimo aprobado'+num(Core.num(pr.minRate!=null?pr.minRate:66),' data-k="tr"')+'</label>'+
-      '<label>Nota que espera sacar<select data-k="ng">'+gOpt('B')+'</select></label>'+
-      '<label>Créditos por clase'+num(3,' data-k="cpc"')+'</label>'+
-    '</div><div data-out></div>';
-  var m=modal({title:'Calculadora de probatoria', wide:true, body:body, buttons:[{label:'Cerrar',primary:true}]});
+  var st={ng:'B', nx:12};
+  var inp=function(k,v,lbl){ return '<label>'+lbl+'<input type="number" step="any" inputmode="decimal" data-k="'+k+'" value="'+v+'"></label>'; };
+  var body='<div data-out></div>'+
+    '<details class="pcdata"><summary>Cambiar los datos</summary><div class="pcgrid">'+
+      inp('gpa',gpa0!=null?fmt(gpa0):'0','GPA actual')+inp('c',fmtCr(C0),'Créditos en el GPA')+
+      inp('att',fmtCr(cr0.attempted||0),'Créditos intentados')+inp('pas',fmtCr(cr0.passed||0),'Créditos aprobados')+
+      inp('tg',fmt(Core.num(pr.minGPA!=null?pr.minGPA:2)),'GPA mínimo')+inp('tr',Core.num(pr.minRate!=null?pr.minRate:66),'% mínimo aprobado')+
+    '</div></details>';
+  var m=modal({title:'Calculadora de probatoria', narrow:true, body:body, buttons:[{label:'Cerrar',primary:true}]});
   var out=m.body.querySelector('[data-out]');
-  function v(k){ var el=m.body.querySelector('[data-k="'+k+'"]'); return el.tagName==='SELECT'?el.value:Core.num(el.value); }
+  function v(k){ return Core.num(m.body.querySelector('[data-k="'+k+'"]').value); }
+  function clases(n){ var k=Math.ceil(n/3-1e-9); return k+' clase'+(k===1?'':'s'); }
   function calc(){
-    var G=v('gpa'), C=v('c'), P=G*C, att=v('att'), pas=v('pas'), TG=v('tg'), TR=v('tr')/100, NG=v('ng'), cpc=v('cpc')||3, sc={A:4,B:3,C:2};
-    var cls=function(n){ var k=Math.ceil(n/cpc-1e-9); return k+' clase'+(k===1?'':'s')+' de '+fmtCr(cpc)+' cr'; };
-    // Promedio
-    var gHtml, needG=null;
-    if(C>0 && G>=TG) gHtml='<div class="pcok">✓ El promedio ya está en '+fmt(G)+', igual o sobre el mínimo de '+fmt(TG)+'.</div>';
-    else {
-      var rowsG=['A','B','C'].map(function(x){
-        var pts=sc[x]; if(pts<=TG) return '<tr><td>Con <strong>'+x+'</strong></td><td colspan="2">No sube el promedio a '+fmt(TG)+' (una '+x+' vale '+pts+' puntos).</td></tr>';
-        var n=Math.max(0,(TG*C-P)/(pts-TG)); n=Math.ceil(n-1e-9); if(x===NG) needG=n;
-        return '<tr'+(x===NG?' class="match"':'')+'><td>Con <strong>'+x+'</strong> en todas</td><td class="num"><strong>'+fmtCr(n)+'</strong> créditos</td><td>≈ '+cls(n)+'</td></tr>';
-      }).join('');
-      gHtml='<div class="pcbad">El promedio está en <strong>'+fmt(G)+'</strong>; el mínimo es '+fmt(TG)+'.</div><table class="plain"><tbody>'+rowsG+'</tbody></table>';
-    }
-    // Créditos aprobados vs intentados
-    var rate=att>0?pas/att:1, rHtml, needR=null;
-    if(rate>=TR) rHtml='<div class="pcok">✓ Aprobó '+(rate*100).toFixed(0)+'% de lo intentado (mínimo '+(TR*100).toFixed(0)+'%).</div>';
-    else { needR=Math.ceil(Math.max(0,(TR*att-pas)/(1-TR))-1e-9);
-      rHtml='<div class="pcbad">Aprobó <strong>'+fmtCr(pas)+' de '+fmtCr(att)+'</strong> créditos = '+(rate*100).toFixed(0)+'%; el mínimo es '+(TR*100).toFixed(0)+'%.</div>'+
-        '<p style="margin:6px 0">Necesita aprobar <strong>'+fmtCr(needR)+' créditos</strong> (≈ '+cls(needR)+') <strong>sin fracasar ni darse de baja</strong> de ninguna.</p>'; }
-    var both='';
-    if(needG!=null||needR!=null){ var n=Math.max(needG||0,needR||0);
-      both='<div class="pcsum">Para salir de probatoria por las dos razones: aprobar unos <strong>'+fmtCr(n)+' créditos</strong> (≈ '+cls(n)+') con <strong>'+NG+'</strong> o mejor'+(needG==null&&G<TG?' <span class="small">(con '+NG+' no alcanza el promedio)</span>':'')+'.</div>'; }
-    // Repetir clases
-    var repHtml='';
-    if(reps.length && G<TG+0.5){
-      var pts=P, acc=[], ng=sc[NG];
-      var lines=reps.slice(0,6).map(function(r){ pts+= (Math.max(ng,r.pts)-r.pts)*r.cr; var ng2=C>0?pts/C:0; acc.push(r.code);
-        return '<tr><td>Repite <strong>'+esc(r.code)+'</strong> ('+esc(r.grade)+', '+fmtCr(r.cr)+' cr)'+(acc.length>1?' <span class="small muted">y las anteriores</span>':'')+'</td><td class="num">GPA <strong>'+fmt(ng2)+'</strong></td><td>'+(ng2>=TG?'<span style="color:var(--ok)">llega al mínimo</span>':'')+'</td></tr>'; }).join('');
-      repHtml='<h5 class="ukt">Repetir clases con F o D (sacando '+NG+')</h5><p class="small muted" style="margin:0 0 4px">Al repetir, cuenta la nota más alta: sube el promedio sin añadir créditos al GPA.</p><table class="plain"><tbody>'+lines+'</tbody></table>';
-    }
-    // Simulador del próximo trimestre
-    var nx=+(m.body.querySelector('[data-nx]')||{value:12}).value||0, nxg=(m.body.querySelector('[data-nxg]')||{value:NG}).value;
-    var gN=(C+nx)>0?(P+sc[nxg]*nx)/(C+nx):0, rN=(att+nx)>0?(pas+nx)/(att+nx):1;
-    var sim='<h5 class="ukt">¿Y si el próximo trimestre…?</h5><p style="margin:0">Toma <input data-nx type="number" value="'+nx+'" style="width:64px"> créditos y saca <select data-nxg>'+gOpt(nxg)+'</select> en todas → '+
-      'GPA <strong'+(gN>=TG?' style="color:var(--ok)"':' style="color:var(--danger)"')+'>'+fmt(gN)+'</strong> · aprobado <strong'+(rN>=TR?' style="color:var(--ok)"':' style="color:var(--danger)"')+'>'+(rN*100).toFixed(0)+'%</strong></p>';
-    out.innerHTML='<h5 class="ukt">Promedio (GPA)</h5>'+gHtml+'<h5 class="ukt">Créditos aprobados vs. intentados</h5>'+rHtml+both+repHtml+sim+
-      '<p class="small muted" style="margin:12px 0 0">Es un estimado. Las notas W, F y WF cuentan como créditos intentados no aprobados.</p>';
+    var G=v('gpa'), C=v('c'), P=G*C, att=v('att'), pas=v('pas'), TG=v('tg'), TR=v('tr')/100, sc={A:4,B:3};
+    var rate=att>0?pas/att:1, badG=C>0&&G<TG, badR=rate<TR, html='';
+    var chips='<span class="pcchips">Si saca '+['A','B'].map(function(x){ return '<button class="'+(st.ng===x?'on':'')+'" data-ng="'+x+'">'+x+'</button>'; }).join('')+'</span>';
+    if(!badG && !badR) html+='<div class="pcbig ok">✓ No está en probatoria.<span>GPA '+fmt(G)+' · aprobó '+(rate*100).toFixed(0)+'% de lo intentado</span></div>';
+    if(badG){ var n=Math.ceil(Math.max(0,(TG*C-P)/(sc[st.ng]-TG))-1e-9);
+      html+='<div class="pcbig"><small>Para subir el promedio de '+fmt(G)+' a '+fmt(TG)+'</small>Aprobar <b>'+clases(n)+'</b> con <b>'+st.ng+'</b><span>('+fmtCr(n)+' créditos)</span>'+chips+'</div>'; }
+    if(badR){ var nr=Math.ceil(Math.max(0,(TR*att-pas)/(1-TR))-1e-9);
+      html+='<div class="pcbig"><small>Para llegar al '+(TR*100).toFixed(0)+'% de créditos aprobados (ahora '+(rate*100).toFixed(0)+'%)</small>Aprobar <b>'+clases(nr)+'</b> sin fracasar ni darse de baja<span>('+fmtCr(nr)+' créditos)</span></div>'; }
+    if(badG && reps.length){ var pts=P, used=[], hit=null;
+      for(var i=0;i<reps.length && i<4;i++){ pts+=(Math.max(sc[st.ng],reps[i].pts)-reps[i].pts)*reps[i].cr; used.push(reps[i].code); if(C>0 && pts/C>=TG){ hit=pts/C; break; } }
+      var gr=C>0?pts/C:0;
+      html+='<p class="pctip">💡 Si repite '+esc(used.join(' y '))+' y saca '+st.ng+', el promedio '+(hit!=null?'llega a <b>'+fmt(hit)+'</b>.':'sube a <b>'+fmt(gr)+'</b>.')+'</p>'; }
+    var gN=(C+st.nx)>0?(P+sc[st.ng]*st.nx)/(C+st.nx):0, rN=(att+st.nx)>0?(pas+st.nx)/(att+st.nx):1;
+    html+='<p class="pcsim">Probar: si el próximo trimestre aprueba <input data-nx type="number" value="'+st.nx+'"> créditos con '+st.ng+' → '+
+      'GPA <b style="color:'+(gN>=TG?'var(--ok)':'var(--danger)')+'">'+fmt(gN)+'</b> · <b style="color:'+(rN>=TR?'var(--ok)':'var(--danger)')+'">'+(rN*100).toFixed(0)+'%</b> aprobado</p>';
+    out.innerHTML=html;
   }
-  m.body.addEventListener('input',function(e){ if(e.target.matches('[data-k],[data-nx]')) { var a=document.activeElement, isNx=a&&a.hasAttribute('data-nx'), pos=a&&a.selectionStart; calc(); if(isNx){ var n=m.body.querySelector('[data-nx]'); n.focus(); } } });
-  m.body.addEventListener('change',function(e){ if(e.target.matches('select')) calc(); });
+  m.body.addEventListener('click',function(e){ var b=e.target.closest('[data-ng]'); if(b){ st.ng=b.getAttribute('data-ng'); calc(); } });
+  m.body.addEventListener('input',function(e){
+    if(e.target.matches('[data-k]')) calc();
+    else if(e.target.matches('[data-nx]')){ st.nx=Core.num(e.target.value); calc(); var n=out.querySelector('[data-nx]'); n.focus(); try{ n.setSelectionRange(n.value.length,n.value.length); }catch(x){} }
+  });
   calc();
 }
 /** Probatoria en la línea de progreso: dice si es por promedio (GPA) o por créditos aprobados vs. intentados. */
@@ -2982,7 +2961,7 @@ function wizardHTML(){
     '</ol><p class="small muted" style="margin:10px 0 0">¿Dudas? Toca <strong>Ayuda</strong> arriba a la derecha.</p></div>';
 }
 /* ---------------- Ayuda ---------------- */
-var APP_VERSION='12 nov 2026 · 5:30 pm';
+var APP_VERSION='12 nov 2026 · 5:45 pm';
 function openHelp(){
   var sec=function(t,items){ return '<h4 style="margin:16px 0 6px">'+t+'</h4><ul style="margin:0;padding-left:20px">'+items.map(function(i){return '<li style="margin:4px 0">'+i+'</li>';}).join('')+'</ul>'; };
   var body='<p style="margin-top:0">El planificador arma el plan de estudios de cada estudiante, trimestre por trimestre, siguiendo los prerrequisitos y las reglas de PUPR.</p>'+
