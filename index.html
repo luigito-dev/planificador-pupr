@@ -302,6 +302,7 @@ pre.raw{white-space:pre-wrap;font-size:12px;background:var(--soft);padding:12px;
 .loadbar label{display:flex;gap:6px;align-items:center}
 .loadbar select{padding:4px 8px;font-size:14px}
 /* Probatoria */
+.trfsum{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 10px} .trfsum>div{flex:1 1 150px;border-radius:10px;padding:10px 12px;border:1px solid var(--line)} .trfsum b{font-size:22px;margin-right:6px} .trfsum span{display:block;font-size:12px;color:var(--muted)} .trfsum .ok{background:#e8f6ec;border-color:#8fd0a0} .trfsum .no{background:#fde8e8;border-color:#f1b0b0} .trfsum .fl{background:#fff3dc;border-color:#f0cf8a} .trf td,.trf th{padding:5px 8px}
 .uklist{list-style:none;margin:0 0 12px;padding:0;display:grid;gap:8px} .ukcard{border:1px solid var(--line);border-radius:10px;padding:9px 12px} .ukh{display:flex;flex-wrap:wrap;gap:6px;align-items:baseline;margin-bottom:3px} .ukp{margin-left:auto;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px} .ukp.hi{background:#fde8e8;color:#a32020} .ukp.md{background:#fff3dc;color:#8a5a00} .ukp.lo{background:#eef2f6;color:#4a5563} .ukt{margin:10px 0 6px;font-size:13px}
 .problg{font-weight:500} .problg b{font-weight:700} .problg.bad{color:var(--danger)} .problg.warn{color:var(--warn)} .problg.ok b{color:var(--ok)}
 .probadge{display:inline-block;margin-top:6px;font-size:13px;font-weight:600;padding:3px 10px;border-radius:12px}
@@ -2599,10 +2600,11 @@ function openCompare(){
       rows.map(function(d){
         return '<tr'+(d.isCur?' style="background:var(--soft)"':'')+'><td>'+esc(d.name)+(d.isCur?' <span class="tag">actual</span>':'')+'</td>'+
           '<td class="num">'+fmtCr(d.sum.satisfied)+'</td><td class="num">'+fmtCr(d.sum.pending)+'</td><td class="num">'+d.sum.terms+(d.sum.unscheduled?' *':'')+'</td><td class="num">'+esc(d.sum.grad)+'</td>'+
-          '<td class="num">'+(d.isCur?'':'<button class="btn link" data-detail="'+esc(d.key)+'">Ver detalle</button>')+'</td></tr>';
+          '<td class="num" style="white-space:nowrap">'+(d.isCur?'':'<button class="btn link" data-transfer="'+esc(d.key)+'">Qué pasa</button> · <button class="btn link" data-detail="'+esc(d.key)+'">Ver detalle</button>')+'</td></tr>';
       }).join('')+'</tbody></table></div>'+
       (rows.some(function(d){return d.sum.unscheduled;})?'<p class="small muted">* Tiene cursos que no se pudieron ubicar; la fecha puede ser mayor.</p>':'');
   }
+  m.body.addEventListener('click',function(e){ var tb=e.target.closest('[data-transfer]'); if(tb) openTransfer(tb.getAttribute('data-transfer')); });
   pAll.addEventListener('click',function(e){
     var b=e.target.closest('[data-detail]'); if(!b) return;
     var key=b.getAttribute('data-detail'), g=groupOfKey(key);
@@ -2632,6 +2634,7 @@ function openCompare(){
       tr('Graduación estimada',esc(A.grad),esc(B.grad),B.terms<A.terms)+
       ((A.unscheduled||B.unscheduled)?tr('Cursos sin ubicar',A.unscheduled,B.unscheduled):'')+
       '</tbody></table>'+
+      '<div style="margin:14px 0 4px"><button class="btn primary sm" data-transfer="'+esc(key)+'">¿Qué clases pasan y cuáles no? Ver detalle</button></div>'+
       '<h4 style="margin:16px 0 4px">Cursos aprobados que convalidan en '+esc(b.name)+' ('+b.inProg.length+')</h4><p class="small" style="margin:0">'+codes(b.inProg)+'</p>'+
       (b.assigned.length?'<h4 style="margin:14px 0 4px">Se usarían como electivas ('+b.assigned.length+')</h4><p class="small" style="margin:0">'+
         b.assigned.map(function(x){ return '<strong>'+esc(x.code)+'</strong> → '+esc(x.kind); }).join(' · ')+'</p><p class="small muted" style="margin:2px 0 0">Sujeto a la aprobación del departamento.</p>':'')+
@@ -2650,6 +2653,42 @@ function openCompare(){
     else { wrap.classList.add('hidden'); run(cb.value); }
   });
   cs.addEventListener('change',function(){ run(cs.value); });
+}
+/** Ventana: qué clases del historial pasan al otro programa y cuáles no. */
+function openTransfer(key){
+  var d=compareData(key); if(!d){ toast('Ese programa no tiene currículo cargado.'); return; }
+  var base=d.base, byCode={}; base.courses.forEach(function(c){ byCode[c.code]=c; });
+  var st=Core.buildStatus(base,S.records,S.plannerRules), fillBy={}, asg={};
+  Object.keys(st.slots).forEach(function(k){ var s=st.slots[k]; if(s.filledBy){ var sc=byCode[k]; fillBy[s.filledBy]=sc?elecKind(sc.group)[1]:'electiva'; } });
+  d.assigned.forEach(function(x){ asg[x.code]=x.kind; });
+  var last={}; S.records.forEach(function(r){ last[r.code]=r; });
+  var pasa=[], elec=[], no=[], fail=[];
+  Object.keys(last).sort().forEach(function(code){
+    var r=last[code], gr=String(r.grade||'').toUpperCase(), cr=Core.num(r.credits), isIP=gr==='IP';
+    var ok=!!st.approved[code] || (isIP && st.ip && st.ip[code]) || isIP;
+    var row={code:code, name:r.title||(byCode[code]&&byCode[code].name)||'', cr:cr, gr:r.grade||'', ip:isIP};
+    if(!ok){ row.need=!!byCode[code]; fail.push(row); return; }
+    var c=byCode[code];
+    if(fillBy[code]){ row.why=fillBy[code]; elec.push(row); }
+    else if(asg[code]){ row.why=asg[code]+' (sujeto a aprobación)'; elec.push(row); }
+    else if(c && c.type==='OPC'){ row.why=elecKind(c.group)[1]; elec.push(row); }
+    else if(c){ row.why=c.type==='PREP'?'Preparatorio':'Requisito del programa'; pasa.push(row); }
+    else no.push(row);
+  });
+  var sumCr=function(a){ return fmtCr(a.reduce(function(s,x){ return s+x.cr; },0)); };
+  var tbl=function(list, col){ return '<table class="plain trf"><thead><tr><th>Curso</th><th>Descripción</th><th class="num">Cr</th><th>Nota</th>'+(col?'<th>'+col+'</th>':'')+'</tr></thead><tbody>'+list.map(function(x){
+    return '<tr><td><strong>'+esc(x.code)+'</strong></td><td class="small">'+esc(x.name)+'</td><td class="num">'+fmtCr(x.cr)+'</td><td>'+esc(x.gr)+(x.ip?' <span class="small muted">(si la aprueba)</span>':'')+'</td>'+(col?'<td class="small">'+esc(x.why||(x.need?'La tendría que tomar':'No la necesita'))+'</td>':'')+'</tr>'; }).join('')+'</tbody></table>'; };
+  var nPasa=pasa.length+elec.length;
+  var body='<p style="margin-top:0">Si se cambia a <strong>'+esc(d.name)+'</strong>, esto pasaría con sus clases:</p>'+
+    '<div class="trfsum"><div class="ok"><b>'+nPasa+'</b> clases pasan<span>'+sumCr(pasa.concat(elec))+' créditos · no las repite</span></div>'+
+    '<div class="no"><b>'+no.length+'</b> no cuentan<span>'+sumCr(no)+' créditos</span></div>'+
+    (fail.length?'<div class="fl"><b>'+fail.length+'</b> no aprobadas<span>'+fail.filter(function(x){return x.need;}).length+' las tendría que tomar</span></div>':'')+'</div>'+
+    (pasa.length?'<h5 class="ukt">✓ Pasan como requisito del programa ('+pasa.length+')</h5>'+tbl(pasa,'Cuenta como'):'')+
+    (elec.length?'<h5 class="ukt">✓ Pasan como electiva ('+elec.length+')</h5>'+tbl(elec,'Cuenta como'):'')+
+    (no.length?'<h5 class="ukt">✗ No cuentan en '+esc(d.name)+' ('+no.length+')</h5>'+tbl(no):'')+
+    (fail.length?'<h5 class="ukt">No aprobadas ('+fail.length+')</h5>'+tbl(fail,'En el nuevo programa'):'')+
+    '<p class="small muted" style="margin-bottom:0">Estimado según el currículo y el historial. La convalidación final la aprueba el departamento y Registraduría.</p>';
+  modal({title:'¿Qué clases pasan a '+d.name+'?', wide:true, body:body, buttons:[{label:'Cerrar',primary:true}]});
 }
 /** Cambia al programa comparado, guarda cómo estaba para poder deshacerlo y lleva las electivas acomodadas. */
 function switchProgram(key){
@@ -2875,7 +2914,7 @@ function wizardHTML(){
     '</ol><p class="small muted" style="margin:10px 0 0">¿Dudas? Toca <strong>Ayuda</strong> arriba a la derecha.</p></div>';
 }
 /* ---------------- Ayuda ---------------- */
-var APP_VERSION='10 nov 2026 · 2:30 pm';
+var APP_VERSION='12 nov 2026 · 4:00 pm';
 function openHelp(){
   var sec=function(t,items){ return '<h4 style="margin:16px 0 6px">'+t+'</h4><ul style="margin:0;padding-left:20px">'+items.map(function(i){return '<li style="margin:4px 0">'+i+'</li>';}).join('')+'</ul>'; };
   var body='<p style="margin-top:0">El planificador arma el plan de estudios de cada estudiante, trimestre por trimestre, siguiendo los prerrequisitos y las reglas de PUPR.</p>'+
