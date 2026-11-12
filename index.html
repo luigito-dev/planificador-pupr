@@ -302,7 +302,7 @@ pre.raw{white-space:pre-wrap;font-size:12px;background:var(--soft);padding:12px;
 .loadbar label{display:flex;gap:6px;align-items:center}
 .loadbar select{padding:4px 8px;font-size:14px}
 /* Probatoria */
-.ceinfo{list-style:none;margin:0 0 10px;padding:10px 12px;background:var(--soft,#f4f6f9);border-radius:10px;font-size:13.5px;display:grid;gap:6px} .ceacts{display:grid} .ceact{display:flex;gap:10px;align-items:center;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);padding:11px 4px;font:inherit;font-size:15px;color:inherit;cursor:pointer} .ceact:hover{background:var(--soft,#f4f6f9)} .ceact i{width:22px;font-style:normal;text-align:center} .ceact.bad{color:var(--danger)} .ceact.mut{color:var(--muted);font-size:13.5px;border-bottom:0} .cemove{padding:6px 4px 10px} .cemove select{width:100%}
+.ceinfo{list-style:none;margin:0 0 10px;padding:10px 12px;background:var(--soft,#f4f6f9);border-radius:10px;font-size:13.5px;display:grid;gap:6px} .ceacts{display:grid} .ceopen{display:grid;gap:2px;margin-top:4px} .ceopen span{font-size:13.5px} .ceact{display:flex;gap:10px;align-items:center;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);padding:11px 4px;font:inherit;font-size:15px;color:inherit;cursor:pointer} .ceact:hover{background:var(--soft,#f4f6f9)} .ceact i{width:22px;font-style:normal;text-align:center} .ceact.bad{color:var(--danger)} .ceact.mut{color:var(--muted);font-size:13.5px;border-bottom:0} .cemove{padding:6px 4px 10px} .cemove select{width:100%}
 .pcbig{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:0 0 10px;font-size:17px;background:#fdf1f1;border-color:#f1c4c4} .pcbig small{display:block;font-size:12.5px;color:var(--muted);margin-bottom:3px} .pcbig span{display:block;font-size:12.5px;color:var(--muted);margin-top:2px} .pcbig.ok{background:#e8f6ec;border-color:#8fd0a0;color:#1f7a3a;font-weight:600} .pcchips{display:flex!important;gap:6px;align-items:center;margin-top:8px!important} .pcchips button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:2px 12px;font-weight:700;cursor:pointer} .pcchips button.on{background:var(--brand,#0b4fa3);border-color:transparent;color:#fff} .pctip{background:#fff8e6;border-radius:10px;padding:9px 12px;margin:0 0 10px;font-size:14px} .pcsim{font-size:14px;margin:4px 0 8px} .pcsim input{width:56px} .pcdata summary{cursor:pointer;font-size:13px;color:var(--muted);margin-top:4px} .pcdata .pcgrid{margin-top:8px;grid-template-columns:repeat(2,1fr)}
 .pcgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px 12px;margin-bottom:6px} .pcgrid label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)} .pcgrid input,.pcgrid select{font-size:15px;color:var(--ink,inherit)} @media (max-width:680px){ .pcgrid{grid-template-columns:repeat(2,1fr)} } .pcok{color:var(--ok);font-weight:600;margin:2px 0 6px} .pcbad{color:var(--danger);margin:2px 0 6px} .pcsum{background:#eef4fb;border:1px solid #c8daf0;border-radius:10px;padding:10px 12px;margin:10px 0}
 .trfsum{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 10px} .trfsum>div{flex:1 1 150px;border-radius:10px;padding:10px 12px;border:1px solid var(--line)} .trfsum b{font-size:22px;margin-right:6px} .trfsum span{display:block;font-size:12px;color:var(--muted)} .trfsum .ok{background:#e8f6ec;border-color:#8fd0a0} .trfsum .no{background:#fde8e8;border-color:#f1b0b0} .trfsum .fl{background:#fff3dc;border-color:#f0cf8a} .trf td,.trf th{padding:5px 8px}
@@ -2962,7 +2962,7 @@ function wizardHTML(){
     '</ol><p class="small muted" style="margin:10px 0 0">¿Dudas? Toca <strong>Ayuda</strong> arriba a la derecha.</p></div>';
 }
 /* ---------------- Ayuda ---------------- */
-var APP_VERSION='12 nov 2026 · 6:00 pm';
+var APP_VERSION='12 nov 2026 · 6:15 pm';
 function openHelp(){
   var sec=function(t,items){ return '<h4 style="margin:16px 0 6px">'+t+'</h4><ul style="margin:0;padding-left:20px">'+items.map(function(i){return '<li style="margin:4px 0">'+i+'</li>';}).join('')+'</ul>'; };
   var body='<p style="margin-top:0">El planificador arma el plan de estudios de cada estudiante, trimestre por trimestre, siguiendo los prerrequisitos y las reglas de PUPR.</p>'+
@@ -3738,9 +3738,8 @@ function openCourseEditor(uid){
     var um=Core.unlockMap(cur.courses)[c.code]||{direct:[],all:[]};
     var dir=um.direct.filter(pend), all=um.all.filter(pend);
     if(dir.length){
-      var where=function(code){ var g=findCourseByCode(code); return g?' <span class="muted">('+esc(tS(S.plan.terms[g.ti].label))+')</span>':''; };
-      info.push('<li><b>Abre '+dir.length+' clase'+(dir.length>1?'s':'')+'</b>'+(all.length>dir.length?' <span class="muted">('+all.length+' contando las que siguen)</span>':'')+': '+dir.slice(0,6).map(function(x){ return esc(x)+where(x); }).join(', ')+(dir.length>6?' y '+(dir.length-6)+' más':'')+'.</li>');
-    } else info.push('<li class="muted">No es prerrequisito de otra clase pendiente.</li>');
+      info.push('<li><b>Al aprobarla puede tomar:</b><span class="ceopen">'+dir.slice(0,8).map(function(x){ var o=byCode[x]; return '<span><b>'+esc(x)+'</b> '+esc(o&&o.name||'')+'</span>'; }).join('')+(dir.length>8?'<span class="muted">y '+(dir.length-8)+' más</span>':'')+'</span></li>');
+    } else info.push('<li class="muted">No abre otras clases.</li>');
   }
   // Correquisitos
   var co=(c.coreqs||[]).map(function(ors){ return ors.join(' o '); });
