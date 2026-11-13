@@ -302,6 +302,7 @@ pre.raw{white-space:pre-wrap;font-size:12px;background:var(--soft);padding:12px;
 .loadbar label{display:flex;gap:6px;align-items:center}
 .loadbar select{padding:4px 8px;font-size:14px}
 /* Probatoria */
+.sgimg{border:1px dashed var(--line);border-radius:8px;min-height:54px;display:flex;align-items:center;justify-content:center;padding:6px;background:#fff} .sgimg img{max-height:60px;max-width:100%} .sgpad{width:100%;height:auto;border:1px solid var(--line);border-radius:10px;background:#fff;touch-action:none;cursor:crosshair}
 .ceinfo{list-style:none;margin:0 0 10px;padding:10px 12px;background:var(--soft,#f4f6f9);border-radius:10px;font-size:13.5px;display:grid;gap:6px} .ceacts{display:grid} .ceopen{display:grid;gap:2px;margin-top:4px} .ceopen span{font-size:13.5px} .ceact{display:flex;gap:10px;align-items:center;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);padding:11px 4px;font:inherit;font-size:15px;color:inherit;cursor:pointer} .ceact:hover{background:var(--soft,#f4f6f9)} .ceact i{width:22px;font-style:normal;text-align:center} .ceact.bad{color:var(--danger)} .ceact.mut{color:var(--muted);font-size:13.5px;border-bottom:0} .cepin{display:flex;gap:8px;align-items:center;font-size:13.5px;padding:4px 4px 10px;border-bottom:1px solid var(--line);cursor:pointer}
 .pcbig{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:0 0 10px;font-size:17px;background:#fdf1f1;border-color:#f1c4c4} .pcbig small{display:block;font-size:12.5px;color:var(--muted);margin-bottom:3px} .pcbig span{display:block;font-size:12.5px;color:var(--muted);margin-top:2px} .pcbig.ok{background:#e8f6ec;border-color:#8fd0a0;color:#1f7a3a;font-weight:600} .pcchips{display:flex!important;gap:6px;align-items:center;margin-top:8px!important} .pcchips button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:2px 12px;font-weight:700;cursor:pointer} .pcchips button.on{background:var(--brand,#0b4fa3);border-color:transparent;color:#fff} .pctip{background:#fff8e6;border-radius:10px;padding:9px 12px;margin:0 0 10px;font-size:14px} .pcsim{font-size:14px;margin:4px 0 8px} .pcsim input{width:56px} .pcdata summary{cursor:pointer;font-size:13px;color:var(--muted);margin-top:4px} .pcdata .pcgrid{margin-top:8px;grid-template-columns:repeat(2,1fr)}
 .pcgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px 12px;margin-bottom:6px} .pcgrid label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)} .pcgrid input,.pcgrid select{font-size:15px;color:var(--ink,inherit)} @media (max-width:680px){ .pcgrid{grid-template-columns:repeat(2,1fr)} } .pcok{color:var(--ok);font-weight:600;margin:2px 0 6px} .pcbad{color:var(--danger);margin:2px 0 6px} .pcsum{background:#eef4fb;border:1px solid #c8daf0;border-radius:10px;padding:10px 12px;margin:10px 0}
@@ -2962,7 +2963,7 @@ function wizardHTML(){
     '</ol><p class="small muted" style="margin:10px 0 0">¿Dudas? Toca <strong>Ayuda</strong> arriba a la derecha.</p></div>';
 }
 /* ---------------- Ayuda ---------------- */
-var APP_VERSION='12 nov 2026 · 6:30 pm';
+var APP_VERSION='13 nov 2026 · 4:15 pm';
 function openHelp(){
   var sec=function(t,items){ return '<h4 style="margin:16px 0 6px">'+t+'</h4><ul style="margin:0;padding-left:20px">'+items.map(function(i){return '<li style="margin:4px 0">'+i+'</li>';}).join('')+'</ul>'; };
   var body='<p style="margin-top:0">El planificador arma el plan de estudios de cada estudiante, trimestre por trimestre, siguiendo los prerrequisitos y las reglas de PUPR.</p>'+
@@ -5012,13 +5013,17 @@ var SIGNER_DEFAULT={name:'', title:'Consejero en Rehabilitación', dept:'Centro 
 /** Pregunta antes de descargar si se incluye la firma del consejero al final. */
 function askPDF(fn, opts){
   opts=opts||{};
-  var sg=Object.assign({}, SIGNER_DEFAULT, S.signer||{}), on=!!S.signOn, nMiss=opts.missing?(function(){ var w=S.plan?planWindow(false):{rest:[]}; return missingCourses().length+(w.limited?w.rest.length:0)+((S.plan&&S.plan.unscheduled)||[]).length; })():0, hasNotes=!!(opts.notes && S.notes && S.notes.trim());
+  var sg=Object.assign({}, SIGNER_DEFAULT, S.signer||{}), sgImg=sg.img||'', on=!!S.signOn, nMiss=opts.missing?(function(){ var w=S.plan?planWindow(false):{rest:[]}; return missingCourses().length+(w.limited?w.rest.length:0)+((S.plan&&S.plan.unscheduled)||[]).length; })():0, hasNotes=!!(opts.notes && S.notes && S.notes.trim());
   var costBox=opts.costs?'<div class="checklist" style="margin-bottom:8px"><label><input type="checkbox" data-costs'+(S.costsPdfOn?' checked':'')+'><span><strong>Incluir el costo aproximado por trimestre</strong><br><span class="small muted">Sale junto a cada trimestre, con una nota de que es aproximado.</span></span></label></div>':'';
   var body=costBox+(hasNotes?'<div class="checklist" style="margin-bottom:8px"><label><input type="checkbox" data-notes'+(S.notesOn?' checked':'')+'><span><strong>Incluir las notas del consejero</strong><br><span class="small muted">Lo que escribiste en la pestaña Notas.</span></span></label></div>':'')+(nMiss?'<div class="checklist" style="margin-bottom:8px"><label><input type="checkbox" data-miss'+(S.missOn===true?' checked':'')+'><span><strong>Incluir las clases que faltan ('+nMiss+')</strong><br><span class="small muted">Lista al final con las clases que no salen en los trimestres de este plan. Sin marcar, el PDF lleva solo las clases planificadas.</span></span></label></div>':'')+'<div class="checklist"><label><input type="checkbox" data-sg-on'+(on?' checked':'')+'><span><strong>Incluir firma del consejero al final</strong><br><span class="small muted">Añade espacio para firmar y la fecha.</span></span></label></div>'+
     '<div data-sg-fields style="margin-top:12px"'+(on?'':' class="hidden"')+'>'+
     '<label class="field">Nombre del consejero (opcional)<input data-sg="name" value="'+esc(sg.name)+'" placeholder="Ej. Luis Rivera"></label>'+
     '<label class="field">Puesto<input data-sg="title" value="'+esc(sg.title)+'"></label>'+
-    '<label class="field">Oficina<input data-sg="dept" value="'+esc(sg.dept)+'"></label></div>';
+    '<label class="field">Oficina<input data-sg="dept" value="'+esc(sg.dept)+'"></label>'+
+    '<div class="field"><span>Firma (opcional)</span><div class="sgimg" data-sgimg>'+(sg.img?'<img src="'+sg.img+'" alt="Firma">':'<span class="small muted">Sin firma guardada</span>')+'</div>'+
+    '<div class="row" style="gap:8px;margin-top:6px"><button class="btn sm" type="button" data-sg-draw>Dibujar mi firma</button><label class="btn sm" style="cursor:pointer">Subir imagen<input type="file" accept="image/*" data-sg-file hidden></label>'+
+    '<button class="btn link small" type="button" data-sg-clear'+(sg.img?'':' hidden')+'>Quitar</button></div>'+
+    '<span class="small muted">Se guarda solo en esta computadora y sale sobre la línea de firma. La fecha sale sola.</span></div></div>';
   var m=modal({title:opts.title||'Descargar PDF', narrow:true, body:(opts.intro||'')+body, buttons:[{label:'Cancelar'},{label:opts.okLabel||'Descargar',primary:true,onClick:function(b){
     var chk=b.querySelector('[data-sg-on]').checked, nv={};
     b.querySelectorAll('[data-sg]').forEach(function(i){ nv[i.getAttribute('data-sg')]=i.value.trim(); });
@@ -5026,11 +5031,16 @@ function askPDF(fn, opts){
     var nb=b.querySelector('[data-notes]'); if(nb){ S.notesOn=nb.checked; }
     session.includeNotes=!!(nb && nb.checked);
     var cbx=b.querySelector('[data-costs]'); if(cbx){ S.costsPdfOn=cbx.checked; } session.includeCosts=!!(cbx && cbx.checked);
-    S.signOn=chk; S.signer=nv; save();
+    nv.img=sgImg||''; S.signOn=chk; S.signer=nv; save();
     session.sign=chk; session.includeMissing=!!(mb && mb.checked);
     try{ fn(); } finally { session.sign=false; session.includeMissing=false; session.includeNotes=false; session.includeCosts=false; }
   }}]});
   var cb=m.body.querySelector('[data-sg-on]'), fl=m.body.querySelector('[data-sg-fields]');
+  var box=m.body.querySelector('[data-sgimg]'), clr=m.body.querySelector('[data-sg-clear]');
+  function showImg(){ box.innerHTML=sgImg?'<img src="'+sgImg+'" alt="Firma">':'<span class="small muted">Sin firma guardada</span>'; clr.hidden=!sgImg; }
+  m.body.querySelector('[data-sg-draw]').addEventListener('click',function(){ openSignPad(function(d){ sgImg=d; showImg(); }); });
+  m.body.querySelector('[data-sg-file]').addEventListener('change',function(e){ var f=e.target.files[0]; if(!f) return; var r=new FileReader(); r.onload=function(){ shrinkSign(r.result,function(d){ sgImg=d; showImg(); }); }; r.readAsDataURL(f); });
+  clr.addEventListener('click',function(){ sgImg=''; showImg(); });
   cb.addEventListener('change',function(){ fl.classList.toggle('hidden', !cb.checked); });
 }
 /** Bloque de firma al final del documento: línea de firma con nombre, puesto y oficina, y línea de fecha. */
@@ -5052,6 +5062,32 @@ function pdfSignature(doc, y){
   doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(59,72,85);
   lines.forEach(function(l){ doc.text(l, M, ty); ty+=12; });
   doc.text('Fecha', W-M-dw, ly+13);
+  // Fecha de hoy sobre la línea de fecha
+  var d=new Date(), ds=('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+'/'+d.getFullYear();
+  doc.setFont('helvetica','normal'); doc.setFontSize(10.5); doc.setTextColor(28,42,57); doc.text(ds, W-M-dw/2, ly-5, {align:'center'});
+  // Firma guardada (imagen) sobre la línea de firma
+  if(sg.img){ try{ var ip=doc.getImageProperties(sg.img), mh=36, mw=lw-20, sc=Math.min(mw/ip.width, mh/ip.height), iw=ip.width*sc, ih=ip.height*sc; doc.addImage(sg.img, 'PNG', M+8, ly-ih-2, iw, ih); }catch(e){} }
+}
+/** Reduce la imagen de la firma y quita el fondo blanco para que pese poco y se vea limpia. */
+function shrinkSign(src, cb){
+  var im=new Image(); im.onload=function(){
+    var sc=Math.min(1, 600/im.width, 200/im.height), c=document.createElement('canvas'); c.width=Math.max(1,Math.round(im.width*sc)); c.height=Math.max(1,Math.round(im.height*sc));
+    var x=c.getContext('2d'); x.drawImage(im,0,0,c.width,c.height);
+    try{ var px=x.getImageData(0,0,c.width,c.height), a=px.data; for(var i=0;i<a.length;i+=4){ if(a[i]>225&&a[i+1]>225&&a[i+2]>225) a[i+3]=0; } x.putImageData(px,0,0); }catch(e){}
+    cb(c.toDataURL('image/png'));
+  }; im.src=src;
+}
+/** Ventana para dibujar la firma con el dedo o el ratón. */
+function openSignPad(done){
+  var m=modal({title:'Dibujar mi firma', narrow:true, body:'<p class="small muted" style="margin-top:0">Firma dentro del recuadro con el dedo o el ratón.</p><canvas class="sgpad" width="640" height="220"></canvas>',
+    buttons:[{label:'Borrar', left:true, onClick:function(){ clear(); return false; }},{label:'Cancelar'},{label:'Usar esta firma', primary:true, onClick:function(){ if(!drawn){ toast('Dibuja la firma primero.'); return false; } shrinkSign(cv.toDataURL('image/png'), done); }}]});
+  var cv=m.body.querySelector('canvas'), x=cv.getContext('2d'), drawing=false, drawn=false;
+  x.lineWidth=3.2; x.lineCap='round'; x.lineJoin='round'; x.strokeStyle='#1c2a39';
+  function clear(){ x.clearRect(0,0,cv.width,cv.height); drawn=false; }
+  function pos(e){ var r=cv.getBoundingClientRect(); return [(e.clientX-r.left)*cv.width/r.width, (e.clientY-r.top)*cv.height/r.height]; }
+  cv.addEventListener('pointerdown',function(e){ drawing=true; cv.setPointerCapture(e.pointerId); var p=pos(e); x.beginPath(); x.moveTo(p[0],p[1]); e.preventDefault(); });
+  cv.addEventListener('pointermove',function(e){ if(!drawing) return; var p=pos(e); x.lineTo(p[0],p[1]); x.stroke(); drawn=true; e.preventDefault(); });
+  ['pointerup','pointercancel','pointerleave'].forEach(function(ev){ cv.addEventListener(ev,function(){ drawing=false; }); });
 }
 /** Membrete como el template de la universidad: logo, nombre al centro, dirección a la derecha y pie. Se aplica a todas las páginas. */
 function pdfLetterhead(doc){
