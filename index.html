@@ -234,7 +234,7 @@ pre.raw{white-space:pre-wrap;font-size:12px;background:var(--soft);padding:12px;
 .addlist{max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:8px}
 .addrow{display:block;width:100%;text-align:left;padding:8px 10px;border:0;border-bottom:1px solid var(--line);background:var(--paper);font:inherit;font-size:13.5px;color:var(--ink);cursor:pointer}
 .addrow:hover{background:var(--accent-soft)}
-.days.ro{border:1px solid #9aa3ad}.days.ro span{width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;border-right:1px solid #9aa3ad;color:var(--muted)}.days.ro span:last-child{border-right:0}.days.ro span.on{background:#0d4f8b;color:#fff;font-weight:700}
+.ocrtbl .days.ro span{cursor:pointer} .days.ro{border:1px solid #9aa3ad}.days.ro span{width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;border-right:1px solid #9aa3ad;color:var(--muted)}.days.ro span:last-child{border-right:0}.days.ro span.on{background:#0d4f8b;color:#fff;font-weight:700}
 .ocrtbl td{font-size:13px}.ocrtbl select{font:inherit;font-size:13px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;width:auto}
 .schtime select{font:inherit;font-size:13px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:var(--paper);color:var(--ink);width:auto}
 .schtime input{font:inherit;font-size:13px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:var(--paper);color:var(--ink);width:auto}
@@ -2966,7 +2966,7 @@ function wizardHTML(){
     '</ol><p class="small muted" style="margin:10px 0 0">¿Dudas? Toca <strong>Ayuda</strong> arriba a la derecha.</p></div>';
 }
 /* ---------------- Ayuda ---------------- */
-var APP_VERSION='17 nov 2026 · 9:15 am';
+var APP_VERSION='17 nov 2026 · 4:45 pm';
 function openHelp(){
   var sec=function(t,items){ return '<h4 style="margin:16px 0 6px">'+t+'</h4><ul style="margin:0;padding-left:20px">'+items.map(function(i){return '<li style="margin:4px 0">'+i+'</li>';}).join('')+'</ul>'; };
   var body='<p style="margin-top:0">El planificador arma el plan de estudios de cada estudiante, trimestre por trimestre, siguiendo los prerrequisitos y las reglas de PUPR.</p>'+
@@ -3266,7 +3266,7 @@ function renderSchedule(){
     '<span class="spill act">'+fmtCr(CS.reduce(function(s,c){ return s+Core.num(c.credits); },0))+' créditos</span>'+
     (noSch?'<span class="spill warn">'+noSch+' clase'+(noSch>1?'s':'')+' sin horario</span>':'<span class="spill on">Todas tienen horario</span>')+
     (nClash?'<span class="spill warn bad">'+nClash+' opci'+(nClash>1?'ones chocan':'ón choca')+'</span>':'')+
-    '<span class="spacer"></span><div class="menu"><button class="btn sm" data-action="menu" aria-haspopup="true" aria-expanded="false">+ Añadir clase ▾</button><div class="menu-list" role="menu"><button role="menuitem" data-action="sch-addc">Buscar en el currículo</button><button role="menuitem" data-action="sch-img">Leer de una imagen</button></div></div><button class="btn sm" data-action="sch-pdf">Descargar PDF</button></div>';
+    '<span class="spacer"></span><div class="menu"><button class="btn sm" data-action="menu" aria-haspopup="true" aria-expanded="false">+ Añadir clase ▾</button><div class="menu-list" role="menu"><button role="menuitem" data-action="sch-addc">Buscar en el currículo</button><button role="menuitem" data-action="sch-img">Leer de una imagen o texto</button></div></div><button class="btn sm" data-action="sch-pdf">Descargar PDF</button></div>';
   html+='<div class="schwrap"><table class="schtbl"><thead><tr><th style="width:96px"></th><th>Sección</th><th>Profesor</th><th>Días</th><th>Hora</th><th></th></tr></thead><tbody>';
   CS.forEach(function(c){
     var opts=schOpts(key,c.uid);
@@ -3454,7 +3454,7 @@ function parseOfferLine(s){
   if(!title){ var ws=subj.split(' '); subj=ws.pop()||''; title=ws.join(' '); }
   var tm=/(\d{1,2})\s*[:.]\s*(\d{2})\s*([AP])\.?\s*M?\.?\s*[-–—]+\s*(\d{1,2})\s*[:.]\s*(\d{2})\s*([AP])/i.exec(rest);
   // profesor: después del término (Winter…/Fall…) hasta "(" o "..."
-  var pr=rest.replace(/^\s*[A-Za-z]{3,}[^\sA-Za-z]*\s*(?:[.…_]+\s*)?/,'');
+  var pr=rest.replace(/^\s*[A-Za-z]{3,}[^\sA-Za-z]*\s*(?:(?:19|20)\d{2}\s*)?(?:[.…_]+\s*)?/,'');
   pr=pr.split(/\s*\(|\.{2,}|…|\[|\||\s+\d{1,2}\s*[:.]\s*\d/)[0].trim().replace(/[\s.,;:-]+$/,'').replace(/\s+[A-Za-z]$/,'');
   pr=pr.replace(/^([A-ZÁÉÍÓÚÑ][\wáéíóúñ'-]+(?:\s+[A-ZÁÉÍÓÚÑ][\wáéíóúñ'-]+)?)\.\s+(?=[A-ZÁÉÍÓÚÑ])/,'$1, ');
   if(!/^[A-Za-zÁÉÍÓÚÑáéíóúñ]/.test(pr) || pr.length<3) pr='';
@@ -3472,6 +3472,45 @@ function matchOfferCourse(r, termCourses){
   cand.forEach(function(c){ var pre=c.code.split(' ')[0]; c.score=(subj && (subj.indexOf(pre.slice(0,3))===0 || pre.indexOf(subj.slice(0,3))===0)?3:0) + words.filter(function(w){ return String(c.name||'').toUpperCase().indexOf(w)>=0; }).length + (c.uid?1:0); });
   cand.sort(function(a,b){ return b.score-a.score; });
   return cand[0].score>0 || cand.length===1 ? cand[0] : null;
+}
+/** Días escritos en texto: nombres (Monday, Lunes), abreviaturas (Mon, Lun) o letras juntas (MW, LW, TTh, MJ). Índices: 0=domingo … 6=sábado. */
+function parseDaysText(s){
+  s=String(s||''); var out=[], add=function(i){ if(out.indexOf(i)<0) out.push(i); };
+  var names=[[/\b(sunday|domingo|sun|dom)\b/i,0],[/\b(monday|lunes|mon|lun)\b/i,1],[/\b(tuesday|martes|tues?|mar)\b/i,2],[/\b(wednesday|mi[eé]rcoles|wed|mi[eé])\b/i,3],[/\b(thursday|jueves|thu|thur|thurs|jue)\b/i,4],[/\b(friday|viernes|fri|vie)\b/i,5],[/\b(saturday|s[aá]bado|sat|s[aá]b)\b/i,6]];
+  names.forEach(function(n){ if(n[0].test(s)) add(n[1]); });
+  if(out.length) return out.sort();
+  // Letras juntas antes de la hora: "MW 8:00", "LW", "TTh", "MJ", "MWF"
+  var m=/(?:^|\s)((?:TH|Th|[LMKWJVFSRTD]){1,6})\s+\d{1,2}\s*[:.]\s*\d{2}/.exec(s) || /(?:^|\s)((?:TH|Th|[LMKWJVFRT]){2,6})(?:\s|$)/.exec(s);
+  if(m){ var tk=m[1].replace(/TH|Th/g,'R'), es=/[LKJV]/.test(tk);
+    tk.split('').forEach(function(ch){
+      var map=es?{L:1,M:2,K:3,W:3,J:4,V:5,S:6,D:0}:{M:1,T:2,W:3,R:4,F:5,S:6,U:0};
+      if(map[ch]!=null) add(map[ch]);
+    }); }
+  return out.sort();
+}
+/** Lee horarios desde texto pegado (por ejemplo, copiado de la oferta en Banner o escrito a mano). */
+function parseScheduleText(txt){
+  var lines=String(txt||'').replace(/\t/g,' ').split(/\r?\n/).map(function(l){ return l.trim(); }).filter(Boolean), rows=[], cur=null;
+  var TIME=/(\d{1,2})\s*[:.]\s*(\d{2})\s*([AP])?\.?\s*M?\.?\s*[-–—a]+\s*(\d{1,2})\s*[:.]\s*(\d{2})\s*([AP])?/i;
+  function setTime(r,s){ var tm=TIME.exec(s); if(!tm) return false; var ap1=tm[3]||tm[6]||(+tm[1]<7||+tm[1]===12?'P':'A'), ap2=tm[6]||tm[3]||(+tm[4]<8||+tm[4]===12?'P':'A');
+    r.start=snapTime(to24(tm[1],tm[2],ap1),false); r.end=snapTime(to24(tm[4],tm[5],ap2),true); return true; }
+  lines.forEach(function(l){
+    var o=parseOfferLine(l);
+    if(!o){ // formato sencillo: "MATH 1350 01 LW 8:00-9:29 Prof. Pérez"
+      var cm=/\b([A-Za-z]{2,4})\s?-?(\d{4})\b(.*)$/.exec(l);
+      if(cm && (TIME.test(l) || /\b\d{2}[A-Z]?\b/.test(cm[3]))){
+        var rest=cm[3], sec=/^\s*-?\s*([0-9]{1,3}[A-Z]?|[A-Z]{1,3}[0-9]{1,2})\b/.exec(rest);
+        o={title:'', subj:cm[1].toUpperCase(), num:cm[2], sec:sec?sec[1].toUpperCase():'', cr:0, crn:'', prof:'', start:'', end:''};
+        var pm=/(?:prof\.?|profesor[a]?|instructor)\s*:?\s*([A-Za-zÁÉÍÓÚÑáéíóúñ'., -]{3,})$/i.exec(rest); if(pm) o.prof=pm[1].trim();
+      }
+    }
+    if(o){ cur=o; o.days=parseDaysText(l.replace(TIME,'')); if(!o.start) setTime(o,l); rows.push(o); return; }
+    if(cur){ // líneas de la misma sección (Banner pone días y horas en otra línea)
+      if(!cur.start) setTime(cur,l);
+      if(!cur.days.length) cur.days=parseDaysText(l);
+    }
+  });
+  return rows;
 }
 function readScheduleImage(file){
   return new Promise(function(res,rej){ var fr=new FileReader(); fr.onload=function(){ res(fr.result); }; fr.onerror=function(){ rej(new Error('No se pudo abrir la imagen.')); }; fr.readAsDataURL(file); })
@@ -3498,16 +3537,18 @@ function readScheduleImage(file){
 function openScheduleImage(){
   var t=S.plan&&S.plan.terms[session.schIdx]; if(!t) return;
   var key=schTermKey(t);
-  var body='<p class="small muted" style="margin-top:0">Escoge una captura de la oferta de secciones, o pégala aquí con <strong>Ctrl + V</strong>. Se leen la clase, sección, créditos, profesor, días y hora. La imagen no sale de esta computadora.</p>'+
-    '<div class="row"><button class="btn primary" data-pick>Elegir imagen</button><input type="file" accept="image/*" data-file class="hidden"></div><div data-out style="margin-top:12px"></div>';
+  var body='<p class="small muted" style="margin-top:0">Usa una <strong>imagen</strong> (captura de la oferta) o <strong>pega el texto</strong> copiado de la oferta. Se leen la clase, sección, profesor, días y hora. Nada sale de esta computadora.</p>'+
+    '<div class="row"><button class="btn primary" data-pick>Elegir imagen</button><input type="file" accept="image/*" data-file class="hidden"><span class="small muted">o pega una captura con Ctrl + V</span></div>'+
+    '<label class="field" style="margin-top:12px">Pegar texto<textarea data-txt rows="4" placeholder="Ej.: MATH 1350 01 LW 8:00-9:29 AM Prof. Pérez&#10;O pega aquí lo que copies de la oferta de secciones"></textarea></label>'+
+    '<div class="row"><button class="btn" data-readtxt>Leer texto</button></div><div data-out style="margin-top:12px"></div>';
   var rows=null;
-  var m=modal({title:'Leer horarios de una imagen', wide:true, body:body, buttons:[{label:'Cancelar'},{label:'Añadir al horario',primary:true,onClick:function(b){
-    if(!rows||!rows.length){ toast('Primero escoge una imagen.'); return false; }
+  var m=modal({title:'Leer horarios (imagen o texto)', wide:true, body:body, buttons:[{label:'Cancelar'},{label:'Añadir al horario',primary:true,onClick:function(b){
+    if(!rows||!rows.length){ toast('Primero escoge una imagen o pega el texto.'); return false; }
     var n=0, added=0;
     b.querySelectorAll('[data-ri]').forEach(function(tr){
       var r=rows[+tr.getAttribute('data-ri')], uid=tr.querySelector('[data-rc]').value; if(!uid || !tr.querySelector('[data-ron]').checked) return;
       if(uid.indexOf('add:')===0){ var cd=uid.slice(4), had=S.plan.terms[session.schIdx].courses.some(function(x){ return x.code===Core.normCode(cd); }); uid=addCourseToTerm(session.schIdx,{code:cd, name:r.newName||'', credits:r.cr}); if(!uid) return; if(!had) added++; }
-      var opts=schOpts(key,uid,true), o={days:r.days.slice(),start:r.start,end:r.end,sec:r.sec,prof:r.prof};
+      var opts=schOpts(key,uid,true), dsel=[].slice.call(tr.querySelectorAll('[data-dd].on')).map(function(x){ return +x.getAttribute('data-dd'); }), o={days:dsel,start:r.start,end:r.end,sec:r.sec,prof:r.prof};
       if(opts.some(function(x){ return x.sec===o.sec && x.start===o.start && x.days.join()===o.days.join(); })) return;
       if(opts.length===1 && !opts[0].days.length && !opts[0].start && !opts[0].sec) opts[0]=o; else opts.push(o);
       n++;
@@ -3515,13 +3556,15 @@ function openScheduleImage(){
     save(); renderSchedule(); toast(n?n+' horario'+(n>1?'s':'')+' añadido'+(n>1?'s':'')+(added?' ('+added+' clase'+(added>1?'s':'')+' nueva'+(added>1?'s':'')+' en el trimestre)':'')+'.':'No se añadió ningún horario.');
   }}]});
   var out=m.body.querySelector('[data-out]'), inp=m.body.querySelector('[data-file]');
-  function dayStr(a){ return SCH_DAYS.map(function(d,i){ return '<span class="'+(a.indexOf(i)>=0?'on':'')+'">'+d[0]+'</span>'; }).join(''); }
+  function dayStr(a){ return SCH_DAYS.map(function(d,i){ return '<span data-dd="'+i+'" title="'+d[1]+'" class="'+(a.indexOf(i)>=0?'on':'')+'">'+d[0]+'</span>'; }).join(''); }
   function go(file){
     if(!file || !/^image\//.test(file.type)){ toast('Escoge una imagen (PNG o JPG).'); return; }
     out.innerHTML='<p class="muted">Leyendo la imagen… La primera vez tarda un poco más.</p>';
-    readScheduleImage(file).then(function(rs){
+    readScheduleImage(file).then(function(rs){ show(rs,'img'); }).catch(function(err){ out.innerHTML='<p style="color:var(--danger)">'+esc(err&&err.message||'No se pudo leer la imagen.')+'</p>'; });
+  }
+  function show(rs, src){
       rows=rs;
-      if(!rs.length){ out.innerHTML='<p>No se encontraron horarios en la imagen. Prueba con una captura más clara que incluya el número del curso, la sección y la hora.</p>'; return; }
+      if(!rs.length){ out.innerHTML=src==='img'?'<p>No se encontraron horarios en la imagen. Prueba con una captura más clara que incluya el número del curso, la sección y la hora.</p>':'<p>No se encontraron clases en el texto. Cada clase debe tener el código (ej. MATH 1350) y, si puedes, la sección, los días y la hora.</p>'; return; }
       out.innerHTML='<p class="small" style="margin:0 0 8px">Se encontraron <strong>'+rs.length+'</strong> secciones. Revisa y escoge a qué clase va cada una.</p><div class="schwrap"><table class="schtbl ocrtbl"><thead><tr><th></th><th>Leído</th><th>Clase</th><th>Sección</th><th>Profesor</th><th>Días</th><th>Hora</th></tr></thead><tbody>'+
         rs.map(function(r,i){
           var mt=matchOfferCourse(r,t.courses), inTerm=mt&&mt.uid;
@@ -3532,8 +3575,11 @@ function openScheduleImage(){
             '<td><select data-rc>'+opts+'</select>'+(!inTerm?'<div class="small muted">'+(mt&&findCourseByCode(mt.code)?'Está en '+esc(tS(S.plan.terms[findCourseByCode(mt.code).ti].label))+'; se moverá aquí':mt?'No está en el plan; se añadirá':'No está en el currículo; se añadirá como clase nueva')+'</div>':'')+'</td><td>'+esc(r.sec)+'</td><td>'+esc(r.prof||'—')+'</td><td><span class="days ro">'+dayStr(r.days)+'</span></td><td class="tm">'+(r.start?fmt12(r.start)+' – '+fmt12(r.end):'—')+'</td></tr>';
         }).join('')+'</tbody></table></div>';
       out.querySelectorAll('[data-rc]').forEach(function(s){ s.addEventListener('change',function(){ s.closest('tr').querySelector('[data-ron]').checked=!!s.value; }); });
-    }).catch(function(err){ out.innerHTML='<p style="color:var(--danger)">'+esc(err&&err.message||'No se pudo leer la imagen.')+'</p>'; });
+      if(rs.some(function(r){ return !r.days.length; })) out.insertAdjacentHTML('afterbegin','<p class="small" style="margin:0 0 6px;color:var(--warn)">Toca las letras de los días para marcarlos donde falten.</p>');
   }
+  out.addEventListener('click',function(e){ var d=e.target.closest('[data-dd]'); if(d) d.classList.toggle('on'); });
+  var ta=m.body.querySelector('[data-txt]');
+  m.body.querySelector('[data-readtxt]').addEventListener('click',function(){ if(!ta.value.trim()){ toast('Pega primero el texto.'); return; } show(parseScheduleText(ta.value),'txt'); });
   m.body.querySelector('[data-pick]').addEventListener('click',function(){ inp.value=''; inp.click(); });
   inp.addEventListener('change',function(){ go(inp.files[0]); });
   function onPaste(e){ if(!document.body.contains(m.el)){ document.removeEventListener('paste',onPaste); return; } var it=[].slice.call((e.clipboardData||{}).items||[]).filter(function(x){ return /^image\//.test(x.type); })[0]; if(it){ e.preventDefault(); go(it.getAsFile()); } }
