@@ -2966,7 +2966,7 @@ function wizardHTML(){
     '</ol><p class="small muted" style="margin:10px 0 0">¿Dudas? Toca <strong>Ayuda</strong> arriba a la derecha.</p></div>';
 }
 /* ---------------- Ayuda ---------------- */
-var APP_VERSION='17 nov 2026 · 4:45 pm';
+var APP_VERSION='17 nov 2026 · 5:00 pm';
 function openHelp(){
   var sec=function(t,items){ return '<h4 style="margin:16px 0 6px">'+t+'</h4><ul style="margin:0;padding-left:20px">'+items.map(function(i){return '<li style="margin:4px 0">'+i+'</li>';}).join('')+'</ul>'; };
   var body='<p style="margin-top:0">El planificador arma el plan de estudios de cada estudiante, trimestre por trimestre, siguiendo los prerrequisitos y las reglas de PUPR.</p>'+
@@ -3592,7 +3592,8 @@ function planSummaryText(){
   var L=[];
   L.push('Saludos'+(first?' '+first:'')+':','');
   L.push('Te comparto el resumen de tu plan académico en '+programName(S.program)+'.','');
-  L.push('GPA: '+fmt(a.gpa)+'   |   Créditos aprobados: '+fmtCr(a.earned)+'   |   Créditos pendientes: '+(a.pending==null?'—':fmtCr(a.pending)));
+  L.push('GPA: '+fmt(a.gpa)+'   |   Créditos aprobados: '+(a.required?fmtCr(a.satisfied)+' de '+fmtCr(a.required):fmtCr(a.earned))+'   |   Créditos pendientes: '+(a.pending==null?'—':fmtCr(a.pending)));
+  var pfE=prepFacts(a); if(pfE) L.push('Preparatorios: '+pfE.main+', '+pfE.sub);
   L.push('Graduación estimada: '+String(a.grad).replace(' *',''),'');
   L.push('PLAN POR TRIMESTRE');
   win.idx.forEach(function(ti){
@@ -4273,6 +4274,7 @@ function auditBody(){
   html+='<table class="sh-tot"><tr><td>Créditos del programa</td><td>'+fmtCr(cur.requiredCredits)+'</td></tr>'+
     '<tr><td>Créditos aprobados</td><td>'+fmtCr(cur.requiredCredits-(a.pending||0))+'</td></tr>'+
     '<tr class="b"><td>Créditos que faltan</td><td>'+fmtCr(a.pending||0)+'</td></tr>'+
+    (prepFacts(a)?'<tr><td>Preparatorios</td><td>'+prepFacts(a).main+' <span class="small muted">('+esc(prepFacts(a).sub)+')</span></td></tr>':'')+
     groupsInfo.map(function(gi){ return '<tr><td>'+esc(gi.name)+': faltan</td><td>'+fmtCr(Math.max(0,gi.need-gi.done))+' de '+fmtCr(gi.need)+'</td></tr>'; }).join('')+
     '</table></div>';
   var terms=Core.Terms.sequence({season:'Fall',year:2015},60,true).map(Core.Terms.label);
@@ -4863,7 +4865,7 @@ function exportAuditPDF(){
   doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(59,72,85);
   var d=new Date(); var ds=('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+'/'+d.getFullYear();
   var gradTxt=pdfSafe(String(a.grad).replace(' *',''));
-  var hdr='Estudiante: '+pdfSafe(S.student.name||'-')+'     Núm.: '+pdfSafe(S.student.id||'-')+'     Fecha: '+ds+'     GPA: '+fmt(a.gpa)+'     Créditos: '+fmtCr(cur.requiredCredits-(a.pending||0))+' de '+fmtCr(cur.requiredCredits)+' aprobados     Graduación estimada: '+gradTxt;
+  var hdr='Estudiante: '+pdfSafe(S.student.name||'-')+'     Núm.: '+pdfSafe(S.student.id||'-')+'     Fecha: '+ds+'     GPA: '+fmt(a.gpa)+'     Créditos: '+fmtCr(cur.requiredCredits-(a.pending||0))+' de '+fmtCr(cur.requiredCredits)+' aprobados ('+fmtCr(a.pending||0)+' pendientes)'+(prepFacts(a)?'     Preparatorios: '+prepFacts(a).main+', '+prepFacts(a).sub:'')+'     Graduación estimada: '+gradTxt;
   var hs=10; while(hs>7.5 && doc.getTextWidth(hdr)*(hs/doc.getFontSize())>W-2*M){ hs-=0.5; }
   doc.setFontSize(hs); doc.text(hdr, M, 74+OY-14); doc.setFontSize(10);
   doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(59,72,85);
@@ -5160,6 +5162,13 @@ function pdfLogo(doc, x, y, w){
   try{ doc.addImage(PUPR_LOGO,'PNG',x,y,w,h); }catch(e){ return 0; }
   return h;
 }
+/** Texto de preparatorios para PDF y correo: "11 de 11" y "completados" / "faltan 3 (9 cr)". */
+function prepFacts(a){
+  var p=a.prog||{}; if(!p.prepTotal) return null;
+  var sub=p.prepPend?'faltan '+p.prepPend+' ('+fmtCr(p.prepPendCr)+' cr)':p.prepIP?p.prepIP+' en progreso':'completados';
+  if(p.prepExempt) sub+=' · '+p.prepExempt+' exento'+(p.prepExempt>1?'s':'');
+  return {main:p.prepDone+' de '+p.prepTotal, sub:sub};
+}
 function studentBlock(doc, y){
   var a=academicSummary();
   var M=54;
@@ -5169,13 +5178,20 @@ function studentBlock(doc, y){
   y+=18;
   doc.setFont('helvetica','normal'); doc.setFontSize(10.5); doc.setTextColor(70,80,90);
   doc.text('Programa: '+pdfSafe(currentBase()||'-')+(specLabel(S.program)?'     Especialidad: '+pdfSafe(specLabel(S.program)):''), M, y); y+=16;
-  var facts=[['GPA',fmt(a.gpa)],['Créditos aprobados',fmtCr(a.earned)],['Créditos pendientes',a.pending==null?'-':fmtCr(a.pending)],['Graduación estimada',pdfSafe(a.grad.replace(' *',''))]];
-  var colW=(612-2*M)/4;
+  var pf=prepFacts(a);
+  var facts=[['GPA',fmt(a.gpa)],['Créditos aprobados',a.required?fmtCr(a.satisfied):fmtCr(a.earned), a.required?' de '+fmtCr(a.required):''],['Créditos pendientes',a.pending==null?'-':fmtCr(a.pending)]];
+  if(pf) facts.push(['Preparatorios',pf.main.split(' de ')[0],' de '+pf.main.split(' de ')[1],pf.sub]);
+  facts.push(['Graduación estimada',pdfSafe(a.grad.replace(' *',''))]);
+  var colW=(612-2*M)/facts.length;
   facts.forEach(function(f,i){
-    doc.setFontSize(8.5); doc.setTextColor(100,110,120); doc.text(f[0], M+i*colW, y+6);
-    doc.setFontSize(12.5); doc.setTextColor(28,42,57); doc.setFont('helvetica','bold'); doc.text(f[1], M+i*colW, y+22); doc.setFont('helvetica','normal');
+    var x=M+i*colW;
+    doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(100,110,120); doc.text(f[0], x, y+6);
+    doc.setFontSize(12.5); doc.setTextColor(28,42,57); doc.setFont('helvetica','bold'); doc.text(f[1], x, y+22);
+    if(f[2]){ var w=doc.getTextWidth(f[1]); doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(100,110,120); doc.text(f[2], x+w+1, y+22); }
+    if(f[3]){ doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(100,110,120); doc.text(pdfSafe(f[3]), x, y+33); }
+    doc.setFont('helvetica','normal');
   });
-  y+=36; doc.setDrawColor(210,215,220); doc.line(M,y,612-M,y);
+  y+=(pf?44:36); doc.setDrawColor(210,215,220); doc.line(M,y,612-M,y);
   return y+20;
 }
 var TABLE_STYLE={theme:'plain',styles:{font:'helvetica',fontSize:9,cellPadding:{top:4,bottom:4,left:5,right:5},textColor:[28,42,57],lineColor:[225,230,234],lineWidth:{bottom:0.5}},
