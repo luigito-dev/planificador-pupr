@@ -2832,7 +2832,6 @@ function renderStudent(){
       '<div class="legend"><span><b>Currículo:</b></span><span><i class="dot" style="background:var(--ok)"></i>Completado '+Math.round(pct(a.prog.done))+'%</span>'+
       '<span><i class="dot" style="background:var(--ip)"></i>En progreso '+Math.round(pct(a.prog.ip))+'%</span>'+
       '<span><i class="dot" style="background:var(--bar-pend)"></i>Pendiente '+Math.round(pct(a.prog.pend))+'%</span>'+
-      (a.prog.prepTotal?'<span class="lgsep"><b>Preparatorios:</b> '+a.prog.prepDone+' de '+a.prog.prepTotal+' aprobados'+(a.prog.prepIP?' · '+a.prog.prepIP+' en progreso':'')+(a.prog.prepPend?' · faltan '+a.prog.prepPend:'')+(a.prog.prepExempt?' · '+a.prog.prepExempt+' exentos':'')+'</span>':'')+
       probLegend()+
       '</div></div>' : '');
   fitSelects();
@@ -2967,7 +2966,7 @@ function wizardHTML(){
     '</ol><p class="small muted" style="margin:10px 0 0">¿Dudas? Toca <strong>Ayuda</strong> arriba a la derecha.</p></div>';
 }
 /* ---------------- Ayuda ---------------- */
-var APP_VERSION='17 nov 2026 · 9:00 am';
+var APP_VERSION='17 nov 2026 · 9:15 am';
 function openHelp(){
   var sec=function(t,items){ return '<h4 style="margin:16px 0 6px">'+t+'</h4><ul style="margin:0;padding-left:20px">'+items.map(function(i){return '<li style="margin:4px 0">'+i+'</li>';}).join('')+'</ul>'; };
   var body='<p style="margin-top:0">El planificador arma el plan de estudios de cada estudiante, trimestre por trimestre, siguiendo los prerrequisitos y las reglas de PUPR.</p>'+
