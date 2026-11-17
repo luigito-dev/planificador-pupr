@@ -308,7 +308,7 @@ pre.raw{white-space:pre-wrap;font-size:12px;background:var(--soft);padding:12px;
 .pcgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px 12px;margin-bottom:6px} .pcgrid label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)} .pcgrid input,.pcgrid select{font-size:15px;color:var(--ink,inherit)} @media (max-width:680px){ .pcgrid{grid-template-columns:repeat(2,1fr)} } .pcok{color:var(--ok);font-weight:600;margin:2px 0 6px} .pcbad{color:var(--danger);margin:2px 0 6px} .pcsum{background:#eef4fb;border:1px solid #c8daf0;border-radius:10px;padding:10px 12px;margin:10px 0}
 .trfsum{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 10px} .trfsum>div{flex:1 1 150px;border-radius:10px;padding:10px 12px;border:1px solid var(--line)} .trfsum b{font-size:22px;margin-right:6px} .trfsum span{display:block;font-size:12px;color:var(--muted)} .trfsum .ok{background:#e8f6ec;border-color:#8fd0a0} .trfsum .no{background:#fde8e8;border-color:#f1b0b0} .trfsum .fl{background:#fff3dc;border-color:#f0cf8a} .trf td,.trf th{padding:5px 8px}
 .uklist{list-style:none;margin:0 0 12px;padding:0;display:grid;gap:8px} .ukcard{border:1px solid var(--line);border-radius:10px;padding:9px 12px} .ukh{display:flex;flex-wrap:wrap;gap:6px;align-items:baseline;margin-bottom:3px} .ukp{margin-left:auto;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px} .ukp.hi{background:#fde8e8;color:#a32020} .ukp.md{background:#fff3dc;color:#8a5a00} .ukp.lo{background:#eef2f6;color:#4a5563} .ukt{margin:10px 0 6px;font-size:13px}
-.problg{font-weight:500} .problg b{font-weight:700} .problg.bad{color:var(--danger)} .problg.warn{color:var(--warn)} .problg.ok b{color:var(--ok)}
+.lgsep{border-left:1px solid var(--line);padding-left:12px} .problg{font-weight:500} .problg b{font-weight:700} .problg.bad{color:var(--danger)} .problg.warn{color:var(--warn)} .problg.ok b{color:var(--ok)}
 .probadge{display:inline-block;margin-top:6px;font-size:13px;font-weight:600;padding:3px 10px;border-radius:12px}
 .probadge.bad{background:color-mix(in srgb,var(--danger) 14%,transparent);color:var(--danger)}
 .probadge.warn{background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn)}
@@ -2046,7 +2046,7 @@ function academicSummary(){
   var cur=curr(), g=gpaResult();
   var ov=gpaOverride();
   var out={ gpa:ov!=null?ov:g.gpa, gpaCalc:g.gpa, gpaEdited:ov!=null, earned:g.earnedCredits, earnedPrep:g.earnedPrepCredits, pending:null, grad:'—',
-    prog:{done:0,ip:0,pend:0,prepDone:0,prepTotal:0} };
+    prog:{done:0,ip:0,pend:0,prepDone:0,prepTotal:0,prepIP:0,prepPend:0,prepPendCr:0} };
   if(!cur) return out;
   var st=Core.buildStatus(cur, S.records, S.plannerRules);
   var satisfied=0, ex=exemptList(); out.prog.prepExempt=0;
@@ -2057,10 +2057,12 @@ function academicSummary(){
     var status = s ? s.status : 'pending';
     // Preparatorios que el currículo cuenta dentro del total (Arquitectura, Diseño): grupo CUENTA.
     if(status==='done' && (c.type!=='PREP' || c.group==='CUENTA')) satisfied+=c.credits;
-    if(status==='done') out.prog.done+=c.credits; else if(status==='ip') out.prog.ip+=c.credits; else out.prog.pend+=c.credits;
-    if(c.type==='PREP'){ out.prog.prepTotal++; if(status==='done') out.prog.prepDone++; }
+    // La barra es solo del currículo; los preparatorios se cuentan aparte (menos los que el currículo cuenta: CUENTA).
+    var inCurr = c.type!=='PREP' || c.group==='CUENTA';
+    if(inCurr){ if(status==='done') out.prog.done+=c.credits; else if(status==='ip') out.prog.ip+=c.credits; else out.prog.pend+=c.credits; }
+    if(c.type==='PREP'){ out.prog.prepTotal++; if(status==='done') out.prog.prepDone++; else if(status==='ip') out.prog.prepIP++; else { out.prog.prepPend++; out.prog.prepPendCr+=c.credits; } }
   });
-  out.pending=Math.max(0, cur.requiredCredits - satisfied);
+  out.pending=Math.max(0, cur.requiredCredits - satisfied); out.satisfied=satisfied; out.required=cur.requiredCredits;
   if(S.plan){
     var nonEmpty=S.plan.terms.filter(function(t){return t.courses.length;});
     if(nonEmpty.length) out.grad = tS(nonEmpty[nonEmpty.length-1].label) + (S.plan.unscheduled.length?' *':'');
@@ -2810,8 +2812,10 @@ function renderStudent(){
     '<dl class="facts">'+
       '<div><dt><label for="gpaEdit">GPA</label></dt><dd><input id="gpaEdit" class="gpa-inline" inputmode="decimal" value="'+(a.gpa==null?'':fmt(a.gpa))+'" placeholder="—" title="Escribe o cambia el GPA" aria-label="GPA (se puede editar)">'+
         (a.gpaEdited?'<small style="display:block">editado · <button class="btn link small" style="padding:0" data-action="gpa-calc">restaurar</button></small>':'')+'</dd></div>'+
-      '<div><dt>Créditos aprobados</dt><dd>'+fmtCr(a.earned)+(a.earnedPrep?' <small>+'+fmtCr(a.earnedPrep)+' prep.</small>':'')+'</dd></div>'+
+      '<div><dt>Créditos aprobados</dt><dd>'+(a.required?fmtCr(a.satisfied)+' <small>de '+fmtCr(a.required)+'</small>':fmtCr(a.earned))+'</dd></div>'+
       '<div><dt>Créditos pendientes</dt><dd>'+(a.pending==null?'—':fmtCr(a.pending))+'</dd></div>'+
+      (a.prog.prepTotal?'<div><dt>Preparatorios</dt><dd>'+a.prog.prepDone+' <small>de '+a.prog.prepTotal+'</small>'+
+        '<small style="display:block">'+(a.prog.prepPend?'faltan '+a.prog.prepPend+' ('+fmtCr(a.prog.prepPendCr)+' cr)':a.prog.prepIP?a.prog.prepIP+' en progreso':'completados')+(a.prog.prepExempt?' · '+a.prog.prepExempt+' exento'+(a.prog.prepExempt>1?'s':''):'')+'</small></dd></div>':'')+
       '<div><dt>Graduación estimada</dt><dd>'+esc(a.grad)+'</dd></div>'+
     '</dl>'+
     '</div>'+
@@ -2825,10 +2829,10 @@ function renderStudent(){
     (total? '<div class="progress" aria-label="Progreso académico"><div class="bar">'+
       '<i style="width:'+pct(a.prog.done)+'%;background:var(--ok)"></i>'+
       '<i style="width:'+pct(a.prog.ip)+'%;background:var(--ip)"></i></div>'+
-      '<div class="legend"><span><i class="dot" style="background:var(--ok)"></i>Completado '+Math.round(pct(a.prog.done))+'%</span>'+
+      '<div class="legend"><span><b>Currículo:</b></span><span><i class="dot" style="background:var(--ok)"></i>Completado '+Math.round(pct(a.prog.done))+'%</span>'+
       '<span><i class="dot" style="background:var(--ip)"></i>En progreso '+Math.round(pct(a.prog.ip))+'%</span>'+
       '<span><i class="dot" style="background:var(--bar-pend)"></i>Pendiente '+Math.round(pct(a.prog.pend))+'%</span>'+
-      (a.prog.prepTotal?'<span>Preparatorios: '+a.prog.prepDone+' de '+a.prog.prepTotal+(a.prog.prepExempt?' ('+a.prog.prepExempt+' exentos)':'')+'</span>':'')+
+      (a.prog.prepTotal?'<span class="lgsep"><b>Preparatorios:</b> '+a.prog.prepDone+' de '+a.prog.prepTotal+' aprobados'+(a.prog.prepIP?' · '+a.prog.prepIP+' en progreso':'')+(a.prog.prepPend?' · faltan '+a.prog.prepPend:'')+(a.prog.prepExempt?' · '+a.prog.prepExempt+' exentos':'')+'</span>':'')+
       probLegend()+
       '</div></div>' : '');
   fitSelects();
@@ -2963,7 +2967,7 @@ function wizardHTML(){
     '</ol><p class="small muted" style="margin:10px 0 0">¿Dudas? Toca <strong>Ayuda</strong> arriba a la derecha.</p></div>';
 }
 /* ---------------- Ayuda ---------------- */
-var APP_VERSION='13 nov 2026 · 4:15 pm';
+var APP_VERSION='17 nov 2026 · 9:00 am';
 function openHelp(){
   var sec=function(t,items){ return '<h4 style="margin:16px 0 6px">'+t+'</h4><ul style="margin:0;padding-left:20px">'+items.map(function(i){return '<li style="margin:4px 0">'+i+'</li>';}).join('')+'</ul>'; };
   var body='<p style="margin-top:0">El planificador arma el plan de estudios de cada estudiante, trimestre por trimestre, siguiendo los prerrequisitos y las reglas de PUPR.</p>'+
