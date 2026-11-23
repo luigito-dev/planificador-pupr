@@ -2966,7 +2966,7 @@ function wizardHTML(){
     '</ol><p class="small muted" style="margin:10px 0 0">¿Dudas? Toca <strong>Ayuda</strong> arriba a la derecha.</p></div>';
 }
 /* ---------------- Ayuda ---------------- */
-var APP_VERSION='17 nov 2026 · 5:00 pm';
+var APP_VERSION='23 nov 2026 · 12:15 pm';
 function openHelp(){
   var sec=function(t,items){ return '<h4 style="margin:16px 0 6px">'+t+'</h4><ul style="margin:0;padding-left:20px">'+items.map(function(i){return '<li style="margin:4px 0">'+i+'</li>';}).join('')+'</ul>'; };
   var body='<p style="margin-top:0">El planificador arma el plan de estudios de cada estudiante, trimestre por trimestre, siguiendo los prerrequisitos y las reglas de PUPR.</p>'+
@@ -4939,6 +4939,7 @@ function openTermEditor(ti){
     S.termLimits=S.termLimits||{};
     var key=Core.Terms.label({season:season,year:year});
     if(lc>0 || lk>0) S.termLimits[key]={credits:lc||0, courses:lk||0}; else delete S.termLimits[key];
+    sortPlanTerms();
     if(b.querySelector('[data-treg]').checked && (lc>0 || lk>0 || lim0)){ save(); session.editMode=false; regenerate(true); toast('Plan regenerado con el límite de '+key+'.'); }
     else { commitEdit(); toast('Trimestre '+t.label+' guardado.'); }
   }}]});
@@ -4969,12 +4970,22 @@ function openAddTerm(beforeIdx){
       if(termOrder(T[i])>termOrder(prev)) break;
       T[i].season=want.season; T[i].year=want.year; T[i].label=Core.Terms.label(want); prev=want;
     }
+    sortPlanTerms();
     session.editMode=true; commitEdit();
     toast('Trimestre '+tS(lbl)+' agregado. Pon clases con "+ Agregar clases" o arrastrándolas.');
   }}]});
   var ps=m.body.querySelector('[data-pos]'), note=m.body.querySelector('[data-note]');
   function upd(){ var s=suggest(+ps.value); m.body.querySelector('[data-ts]').value=s.season; m.body.querySelector('[data-ty]').value=s.year; note.textContent=+ps.value<T.length?'Si la fecha ya está ocupada, los trimestres siguientes se corren.':''; }
   ps.addEventListener('change',upd); upd();
+}
+/** Pone los trimestres del plan en orden cronológico. Si dos quedan con la misma fecha, sus clases se juntan en uno. */
+function sortPlanTerms(){
+  var T=S.plan.terms, seen={}, out=[];
+  T.map(function(x,i){ return {t:x,i:i}; }).sort(function(a,b){ return (termOrder(a.t)-termOrder(b.t)) || (a.i-b.i); }).forEach(function(o){
+    var k=o.t.label; if(seen[k]){ seen[k].courses=seen[k].courses.concat(o.t.courses); if(o.t.manual) seen[k].manual=true; return; }
+    seen[k]=o.t; out.push(o.t);
+  });
+  S.plan.terms=out;
 }
 /** Orden cronológico de un trimestre (FA Y < WI Y < SP Y+1 < SU Y+1). */
 function termOrder(t){ var o={Fall:0,Winter:1,Spring:2,Summer:3}[t.season]; var ay=(t.season==='Fall'||t.season==='Winter')?+t.year:+t.year-1; return ay*4+o; }
