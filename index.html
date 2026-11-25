@@ -303,6 +303,7 @@ pre.raw{white-space:pre-wrap;font-size:12px;background:var(--soft);padding:12px;
 .loadbar select{padding:4px 8px;font-size:14px}
 /* Probatoria */
 .sgimg{border:1px dashed var(--line);border-radius:8px;min-height:54px;display:flex;align-items:center;justify-content:center;padding:6px;background:#fff} .sgimg img{max-height:60px;max-width:100%} .sgpad{width:100%;height:auto;border:1px solid var(--line);border-radius:10px;background:#fff;touch-action:none;cursor:crosshair}
+.gpchips{display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin:0 0 8px} .gpchips button{border:1px solid var(--line);background:transparent;border-radius:999px;padding:2px 9px;font:inherit;font-size:12.5px;cursor:pointer;color:inherit} .gpchips button.on{background:var(--brand,#0b4fa3);border-color:transparent;color:#fff} .gptbl tr.cur{background:#eef4fb}
 .ceinfo{list-style:none;margin:0 0 10px;padding:10px 12px;background:var(--soft,#f4f6f9);border-radius:10px;font-size:13.5px;display:grid;gap:6px} .ceacts{display:grid} .ceopen{display:grid;gap:2px;margin-top:4px} .ceopen span{font-size:13.5px} .ceact{display:flex;gap:10px;align-items:center;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);padding:11px 4px;font:inherit;font-size:15px;color:inherit;cursor:pointer} .ceact:hover{background:var(--soft,#f4f6f9)} .ceact i{width:22px;font-style:normal;text-align:center} .ceact.bad{color:var(--danger)} .ceact.mut{color:var(--muted);font-size:13.5px;border-bottom:0} .cepin{display:flex;gap:8px;align-items:center;font-size:13.5px;padding:4px 4px 10px;border-bottom:1px solid var(--line);cursor:pointer}
 .pcbig{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:0 0 10px;font-size:17px;background:#fdf1f1;border-color:#f1c4c4} .pcbig small{display:block;font-size:12.5px;color:var(--muted);margin-bottom:3px} .pcbig span{display:block;font-size:12.5px;color:var(--muted);margin-top:2px} .pcbig.ok{background:#e8f6ec;border-color:#8fd0a0;color:#1f7a3a;font-weight:600} .pcchips{display:flex!important;gap:6px;align-items:center;margin-top:8px!important} .pcchips button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:2px 12px;font-weight:700;cursor:pointer} .pcchips button.on{background:var(--brand,#0b4fa3);border-color:transparent;color:#fff} .pctip{background:#fff8e6;border-radius:10px;padding:9px 12px;margin:0 0 10px;font-size:14px} .pcsim{font-size:14px;margin:4px 0 8px} .pcsim input{width:56px} .pcdata summary{cursor:pointer;font-size:13px;color:var(--muted);margin-top:4px} .pcdata .pcgrid{margin-top:8px;grid-template-columns:repeat(2,1fr)}
 .pcgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px 12px;margin-bottom:6px} .pcgrid label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)} .pcgrid input,.pcgrid select{font-size:15px;color:var(--ink,inherit)} @media (max-width:680px){ .pcgrid{grid-template-columns:repeat(2,1fr)} } .pcok{color:var(--ok);font-weight:600;margin:2px 0 6px} .pcbad{color:var(--danger);margin:2px 0 6px} .pcsum{background:#eef4fb;border:1px solid #c8daf0;border-radius:10px;padding:10px 12px;margin:10px 0}
@@ -2772,6 +2773,53 @@ function exportComparePDF(){
   saveFile(fileBase()+' - Comparacion '+pdfSafe(name).replace(/[\\\/:*?"<>|]/g,'')+'.pdf', doc.output('blob'));
 }
 
+/* ---------------- Fecha de graduación según la carga (sin Summer) ---------------- */
+var gradLoads=[6,9,12,13,15,16];
+function gradProjection(loads){
+  var cur=curr(); if(!cur) return [];
+  return loads.map(function(cr){
+    var pr=Object.assign({}, S.plannerRules, {maxCredits:cr, maxCourses:0, includeSummer:false, termLimits:{}, unlockFirst:!!S.unlockFirst});
+    var p; try{ p=Core.generatePlan(cur,S.records,S.electiveSel,pr,exemptList()); }catch(e){ return null; }
+    var ne=p.terms.filter(function(x){ return x.courses.length; });
+    return {cr:cr, terms:ne.length, grad:ne.length?tS(ne[ne.length-1].label):'—', uns:p.unscheduled.length};
+  }).filter(Boolean);
+}
+function openGradProjection(){
+  if(!curr()){ toast('Selecciona el programa primero.'); return; }
+  var curCr=Core.num(S.plannerRules.maxCredits)||12, sel=gradLoads.slice();
+  if(sel.indexOf(curCr)<0 && curCr<=16) sel.push(curCr);
+  var all=[6,7,8,9,10,11,12,13,14,15,16];
+  var m=modal({title:'Fecha de graduación', narrow:true, body:'<p class="small muted" style="margin-top:0">Cuándo se graduaría según los créditos que tome cada trimestre (sin Summer). Solo calcula; no cambia el plan.</p><div data-chips class="gpchips"></div><div data-out></div>',
+    buttons:[{label:'Cerrar'},{label:'Descargar PDF', primary:true, onClick:function(){ askPDF(function(){ exportGradPDF(sel); }); return false; }}]});
+  var chips=m.body.querySelector('[data-chips]'), out=m.body.querySelector('[data-out]');
+  function draw(){
+    sel.sort(function(a,b){ return a-b; });
+    chips.innerHTML='<span class="small muted">Cargas:</span>'+all.map(function(c){ return '<button class="'+(sel.indexOf(c)>=0?'on':'')+'" data-gc="'+c+'">'+c+'</button>'; }).join('');
+    var rows=gradProjection(sel), best=rows.reduce(function(b,r){ return !b||r.terms<b.terms?r:b; },null);
+    out.innerHTML=rows.length?'<table class="plain gptbl"><thead><tr><th>Créditos por trimestre</th><th>Se gradúa</th><th class="num">Trimestres</th></tr></thead><tbody>'+rows.map(function(r){
+      return '<tr'+(r.cr===curCr?' class="cur"':'')+'><td>'+r.cr+' créditos'+(r.cr===curCr?' <span class="small muted">(plan actual)</span>':'')+'</td><td><strong>'+esc(r.grad)+'</strong>'+(best&&r===best&&rows.length>1?' <span class="small" style="color:var(--ok);font-weight:600">más rápido</span>':'')+(r.uns?' <span class="small muted">*</span>':'')+'</td><td class="num">'+r.terms+'</td></tr>'; }).join('')+'</tbody></table>'+
+      (rows.some(function(r){ return r.uns; })?'<p class="small muted">* Tiene cursos que no se pudieron ubicar; la fecha puede ser mayor.</p>':''):'<p class="muted">Escoge al menos una carga.</p>';
+  }
+  chips.addEventListener('click',function(e){ var b=e.target.closest('[data-gc]'); if(!b) return; var c=+b.getAttribute('data-gc'), i=sel.indexOf(c); if(i>=0) sel.splice(i,1); else sel.push(c); draw(); });
+  draw();
+}
+function exportGradPDF(loads){
+  var doc=pdfDoc(); if(!doc) return;
+  var y=studentBlock(doc,LH_TOP+10), M=54, curCr=Core.num(S.plannerRules.maxCredits)||12, rows=gradProjection(loads.slice().sort(function(a,b){ return a-b; }));
+  doc.setFont('helvetica','bold'); doc.setFontSize(12.5); doc.setTextColor(28,42,57); doc.text('Proyección de fecha de graduación', M, y);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(100,110,120); doc.text('Sin Summer', 612-M, y, {align:'right'});
+  doc.autoTable(Object.assign({}, TABLE_STYLE, {startY:y+8, head:[['Créditos por trimestre','Se gradúa','Trimestres']],
+    body:rows.map(function(r){ return [r.cr+' créditos'+(r.cr===curCr?' (plan actual)':''), pdfSafe(r.grad)+(r.uns?' *':''), String(r.terms)]; }),
+    columnStyles:{1:{fontStyle:'bold'},2:{halign:'right',cellWidth:70}},
+    didParseCell:function(dd){ if(dd.section==='body' && rows[dd.row.index] && rows[dd.row.index].cr===curCr){ dd.cell.styles.fillColor=[238,244,251]; dd.cell.styles.fontStyle='bold'; } }}));
+  y=doc.lastAutoTable.finalY+16;
+  doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(100,110,120);
+  doc.splitTextToSize('Estimado según el currículo, los prerrequisitos y la oferta de cursos, sin tomar cursos en Summer. Puede cambiar según la oferta y el progreso académico del estudiante.'+(rows.some(function(r){return r.uns;})?' * Tiene cursos que no se pudieron ubicar; la fecha puede ser mayor.':''), 612-2*M).forEach(function(l){ doc.text(l, M, y); y+=11; });
+  pdfSignature(doc, y);
+  pdfLetterhead(doc);
+  saveFile(fileBase()+' - Fecha de graduacion.pdf', doc.output('blob'));
+}
+
 /* ---------------- Programas y especialidades ---------------- */
 // Un programa puede tener especialidades: se escoge el programa y luego la especialidad.
 var PROGRAM_GROUPS = [
@@ -2966,7 +3014,7 @@ function wizardHTML(){
     '</ol><p class="small muted" style="margin:10px 0 0">¿Dudas? Toca <strong>Ayuda</strong> arriba a la derecha.</p></div>';
 }
 /* ---------------- Ayuda ---------------- */
-var APP_VERSION='23 nov 2026 · 12:15 pm';
+var APP_VERSION='25 nov 2026 · 11:00 am';
 function openHelp(){
   var sec=function(t,items){ return '<h4 style="margin:16px 0 6px">'+t+'</h4><ul style="margin:0;padding-left:20px">'+items.map(function(i){return '<li style="margin:4px 0">'+i+'</li>';}).join('')+'</ul>'; };
   var body='<p style="margin-top:0">El planificador arma el plan de estudios de cada estudiante, trimestre por trimestre, siguiendo los prerrequisitos y las reglas de PUPR.</p>'+
@@ -3062,7 +3110,7 @@ rvHTML+'</div>';
   html+='<div class="years'+(edit?' editing':'')+'">';
   years.forEach(function(y, yi){
     var ycr=y.terms.reduce(function(s,ti){ return s+Core.termCredits(S.plan.terms[ti]); },0);
-    html+='<section class="yearblock"><div class="yh"><h3>Año '+(yi+1)+'</h3><span class="muted">'+y.ay+'–'+(y.ay+1)+'</span>'+(yi===0?'<span class="ypills"><button class="spill act" data-action="fastest" title="Compara cuánto se acorta el plan con más créditos o con Summer">Terminar antes</button><button class="spill'+(S.unlockFirst?' on':'')+'" data-action="unlocks" title="Clases que son prerrequisito de muchas otras: conviene tomarlas pronto">Clases que abren más</button><button class="spill'+(cOn?' on':'')+'" data-action="cost-toggle" aria-pressed="'+(cOn?'true':'false')+'" title="'+(cOn?'Ocultar':'Mostrar')+' el costo aproximado">COSTOS</button></span>':'')+'<span class="ycr">'+fmtCr(ycr)+' créditos</span></div><div class="ygrid'+(pr.includeSummer||y.terms.length>3?' four':'')+'">';
+    html+='<section class="yearblock"><div class="yh"><h3>Año '+(yi+1)+'</h3><span class="muted">'+y.ay+'–'+(y.ay+1)+'</span>'+(yi===0?'<span class="ypills"><button class="spill act" data-action="fastest" title="Compara cuánto se acorta el plan con más créditos o con Summer">Terminar antes</button><button class="spill act" data-action="grad-proj" title="Fecha de graduación según los créditos por trimestre">Fecha de graduación</button><button class="spill'+(S.unlockFirst?' on':'')+'" data-action="unlocks" title="Clases que son prerrequisito de muchas otras: conviene tomarlas pronto">Clases que abren más</button><button class="spill'+(cOn?' on':'')+'" data-action="cost-toggle" aria-pressed="'+(cOn?'true':'false')+'" title="'+(cOn?'Ocultar':'Mostrar')+' el costo aproximado">COSTOS</button></span>':'')+'<span class="ycr">'+fmtCr(ycr)+' créditos</span></div><div class="ygrid'+(pr.includeSummer||y.terms.length>3?' four':'')+'">';
     y.terms.forEach(function(ti){
       var t=S.plan.terms[ti];
       var cr=Core.termCredits(t), cap=Core.termCap(t,pr), flag='';
@@ -5547,6 +5595,7 @@ document.addEventListener('click',function(e){
   else if(a==='undo-program') undoProgram();
   else if(a==='hide-prevprog'){ if(S.prevProgram) S.prevProgram.hidden=true; save(); renderPlan(); }
   else if(a==='fastest') openFastest();
+  else if(a==='grad-proj') openGradProjection();
   else if(a==='unlocks') openUnlocks();
   else if(a==='prob-calc') openProbCalc();
   else if(a==='import-audit') pickAuditFile();
